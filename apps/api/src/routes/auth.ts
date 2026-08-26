@@ -14,7 +14,13 @@ const loginSchema = z.object({
 });
 
 const authRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/auth/login", async (request, reply) => {
+  // Password brute-force guard: argon2 is deliberately slow, but that only
+  // raises the cost per guess — it does not cap the number of guesses. 8 per
+  // 5 minutes per client IP is generous for a human, punishing for a script.
+  app.post(
+    "/auth/login",
+    { config: { rateLimit: { max: 8, timeWindow: "5 minutes" } } },
+    async (request, reply) => {
     const body = loginSchema.safeParse(request.body);
     if (!body.success) throw Unprocessable(body.error.message);
 
@@ -61,7 +67,8 @@ const authRoutes: FastifyPluginAsync = async (app) => {
       staff_id: staff.id,
       teacher_id: teacherId,
     });
-  });
+    },
+  );
 
   app.get("/auth/me", async (request) => {
     const auth = requireAuth(request);

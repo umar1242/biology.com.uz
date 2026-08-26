@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 import { sql } from "drizzle-orm";
 import { db } from "./db/client.js";
 import authPlugin from "./plugins/auth.js";
@@ -28,7 +29,10 @@ const PG_FOREIGN_KEY_VIOLATION = "23503";
 const PG_UNIQUE_VIOLATION = "23505";
 
 export function buildApp() {
-  const app = Fastify({ logger: true });
+  // trustProxy: behind Caddy + the Cloudflare tunnel every request would
+  // otherwise carry the proxy's own address as request.ip. The real client
+  // IP is what rate limiting must key on (see the keyGenerator below).
+  const app = Fastify({ logger: true, trustProxy: true });
 
   // Dev-friendly: dashboard/Mini App run on different ports/origins than
   // the API. Tightened to real origins once those are deployed behind Caddy.
@@ -43,6 +47,27 @@ export function buildApp() {
   app.register(cors, {
     origin: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  });
+
+  // Baseline flood ceiling on every route, with a much stricter per-route
+  // override on /auth/login (see routes/auth.ts). Keyed on the real client
+  // IP: Cloudflare puts it in CF-Connecting-IP; behind the tunnel request.ip
+  // alone would collapse every visitor onto the proxy's single address and
+  // let one attacker lock out everyone (or hide behind the shared bucket).
+  app.register(rateLimit, {
+    global: true,
+    max: 300,
+    timeWindow: "1 minute",
+    keyGenerator: (req) =>
+      (req.headers["cf-connecting-ip"] as string | undefined) ?? req.ip,
+    // Only rate-limit traffic that actually arrived from the public internet
+    // through Cloudflare — which always stamps CF-Connecting-IP. Requests
+    // without it can only come from inside (LAN via Caddy, health checks,
+    // the e2e suite): the api port is never exposed publicly, so this can't
+    // be spoofed from outside to dodge the limit. Without this, every
+    // internal caller collapses onto Caddy's single address and trips the
+    // login limit as a group (it broke the student e2e's own provisioning).
+    allowList: (req) => req.headers["cf-connecting-ip"] === undefined,
   });
 
   // Both frontends' fetch wrapper always sets Content-Type: application/json,
@@ -85,6 +110,18 @@ export function buildApp() {
       reply
         .code(409)
         .send({ error: { code: "conflict", message: "A conflicting record already exists" } });
+      return;
+    }
+
+    // Fastify plugins (notably @fastify/rate-limit -> 429) throw errors that
+    // already carry a client-facing statusCode. Honor it instead of masking
+    // every one as a 500 — otherwise a rate-limited login looks like a server
+    // crash to the client and to monitoring.
+    const statusCode = (error as { statusCode?: number }).statusCode;
+    if (typeof statusCode === "number" && statusCode >= 400 && statusCode < 500) {
+      reply.code(statusCode).send({
+        error: { code: (error as { code?: string }).code ?? "error", message: (error as Error).message },
+      });
       return;
     }
 
