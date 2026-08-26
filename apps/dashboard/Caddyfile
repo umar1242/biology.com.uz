@@ -1,0 +1,21 @@
+:80 {
+	encode gzip
+
+	# The tunnel always speaks plain HTTP to this container, so the only way
+	# to know how the visitor actually reached Cloudflare is the header the
+	# edge sets. Without this, http://admin.biolog.com.uz served the panel
+	# over an unencrypted connection and a staff password typed there went
+	# out in the clear.
+	@insecure header X-Forwarded-Proto http
+	redir @insecure https://{host}{uri} permanent
+
+	handle /api/v1/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

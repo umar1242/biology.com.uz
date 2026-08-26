@@ -1,0 +1,93 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: course_platform
+    # Not published to the host — only the api service on the compose
+    # network needs to reach it.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_LOCAL: 1
+    volumes:
+      - bot_api_data:/var/lib/telegram-bot-api
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - apps/api/.env.production
+    depends_on:
+      - postgres
+      - telegram-bot-api
+    volumes:
+      # In TELEGRAM_LOCAL mode getFile returns an absolute path on the bot
+      # API server's own filesystem — it does not serve files over HTTP. The
+      # api service reads homework photos straight off this volume (see
+      # telegram/client.ts); without it every photo would take the slower
+      # cloud fallback, which also caps downloads at 20MB.
+      - bot_api_data:/var/lib/telegram-bot-api:ro
+    group_add:
+      # The bot API server writes its files 0640 as uid/gid 101, so group
+      # membership is what makes the read-only mount actually readable.
+      - "101"
+    # Not published to the host — reached only via the dashboard/miniapp
+    # Caddy containers' reverse_proxy over the compose network.
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      # Host/LAN mapping — still useful for local access without going
+      # through the tunnel. Also reachable from cloudflared over the
+      # compose network as http://dashboard:80 regardless of this mapping;
+      # see DEPLOY.md for adding its Public Hostname.
+      - "127.0.0.1:8080:80"
+
+  miniapp:
+    build:
+      context: .
+      dockerfile: apps/miniapp/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      # Only this port is what the Cloudflare tunnel points at — see
+      # DEPLOY.md for the one-time tunnel setup.
+      - "127.0.0.1:8181:80"
+
+  # One tunnel, two Public Hostnames configured in the Cloudflare Zero
+  # Trust dashboard (not here — the token-based `tunnel run` reads its
+  # routing remotely): one pointed at http://miniapp:80 (required —
+  # Telegram only opens Mini Apps from a public https:// URL), one at
+  # http://dashboard:80 (so the teacher can reach the panel away from the
+  # LAN too). See DEPLOY.md for the one-time setup (TUNNEL_TOKEN in the
+  # root .env).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - miniapp
+      - dashboard
+
+volumes:
+  postgres_data:
+  bot_api_data:

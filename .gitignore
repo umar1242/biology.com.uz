@@ -1,0 +1,22 @@
+# Зависимости и сборка
+node_modules/
+dist/
+build/
+.vite/
+
+# Секреты: токен бота, токен туннеля, JWT_SECRET, ключи Telegram API.
+# Правило намеренно широкое — ловит и .env.production, и .env.local,
+# и резервные копии вида .env.bak-20260826. Наружу выходят только шаблоны.
+.env*
+!.env.example
+!.env.*.example
+*.bak-*
+
+# Локальные бинарники (cloudflared ~38 МБ — ставится отдельно, см. DEPLOY.md)
+.tools/
+
+# Локальные настройки инструментов, специфичные для машины
+.claude/settings.local.json
+
+*.log
+.DS_Store

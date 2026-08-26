@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+/*
+ * Same token contract as the Mini App (apps/miniapp/src/index.css), so the two
+ * surfaces stay visually related and a colour decision is made once. `@theme
+ * inline` puts the var() reference straight into each utility, so flipping
+ * `data-theme` on <html> reskins the app without a re-render.
+ */
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-app: var(--app);
+  --color-card: var(--card);
+  --color-inset: var(--inset);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-on-brand: var(--on-brand);
+
+  /* The welcome panel is an inverted slab in light mode. Mapping it to
+     `brand` flipped it to solid white in dark mode — the loudest thing on a
+     black page. It gets its own pair so it stays a calm dark surface in both. */
+  --color-hero: var(--hero);
+  --color-on-hero: var(--on-hero);
+  --color-hero-muted: var(--hero-muted);
+
+  /* The nav rail is dark in BOTH themes — it is the app's anchor. Its own
+     tokens keep it from being dragged around by the page palette. */
+  --color-nav: var(--nav);
+  --color-nav-line: var(--nav-line);
+  --color-nav-ink: var(--nav-ink);
+  --color-nav-active: var(--nav-active);
+  --color-on-nav-active: var(--on-nav-active);
+
+  --color-pos: var(--pos);
+  --color-pos-soft: var(--pos-soft);
+  --color-neg: var(--neg);
+  --color-neg-soft: var(--neg-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+}
+
+:root {
+  --app: #f2f0f0;
+  --card: #ffffff;
+  --inset: #f6f5f5;
+  --ink: #0d0d0d;
+  --muted: #8c8c8c;
+  --line: #e9e7e7;
+  --brand: #0d0d0d;
+  --on-brand: #ffffff;
+
+  --hero: #0d0d0d;
+  --on-hero: #ffffff;
+  --hero-muted: #9a9a9a;
+
+  --nav: #0d0d0d;
+  --nav-line: transparent;
+  --nav-ink: #9a9a9a;
+  --nav-active: #ffffff;
+  --on-nav-active: #0d0d0d;
+
+  --pos: #0e9f6e;
+  --pos-soft: #e3f5ee;
+  --neg: #e5484d;
+  --neg-soft: #fdeaea;
+  --warn: #b45309;
+  --warn-soft: #fcf0dd;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --app: #000000;
+  --card: #151515;
+  --inset: #1f1f1f;
+  --ink: #ffffff;
+  --muted: #8c8c8c;
+  --line: #262626;
+  --brand: #ffffff;
+  --on-brand: #0d0d0d;
+
+  --hero: #151515;
+  --on-hero: #ffffff;
+  --hero-muted: #8c8c8c;
+
+  /* Lifted a touch off pure black and given a hairline, otherwise the rail
+     and the page melt into one another. */
+  --nav: #0f0f0f;
+  --nav-line: #262626;
+  --nav-ink: #8c8c8c;
+  --nav-active: #ffffff;
+  --on-nav-active: #0d0d0d;
+
+  --pos: #34d399;
+  --pos-soft: #10291f;
+  --neg: #f87171;
+  --neg-soft: #2b1516;
+  --warn: #fbbf24;
+  --warn-soft: #2a1f0b;
+
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--app);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Chrome paints autofilled inputs with its own pale blue and ignores
+ * background-color, which in dark mode left the login fields as bright bars
+ * with barely-legible text. The inset shadow trick is the only way to override
+ * that fill; -webkit-text-fill-color is likewise the only thing that moves the
+ * text colour.
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--card) inset;
+  caret-color: var(--ink);
+  transition: background-color 9999s ease-in-out 0s;
+}

@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+/*
+ * Every colour in the app comes from these tokens, never from a raw Tailwind
+ * palette class — that is what makes one set of components render correctly
+ * in both themes. `@theme inline` emits the var() reference straight into the
+ * utility, so flipping `data-theme` on <html> reskins the app with no re-render.
+ */
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-app: var(--app);
+  --color-card: var(--card);
+  --color-inset: var(--inset);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-on-brand: var(--on-brand);
+
+  --color-pos: var(--pos);
+  --color-pos-soft: var(--pos-soft);
+  --color-neg: var(--neg);
+  --color-neg-soft: var(--neg-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+
+  --radius-card: 1.25rem;
+}
+
+/* Light — warm off-white ground, pure white cards lifted by a hairline. */
+:root {
+  --app: #f2f0f0;
+  --card: #ffffff;
+  --inset: #f6f5f5;
+  --ink: #0d0d0d;
+  --muted: #8c8c8c;
+  --line: #e9e7e7;
+  --brand: #0d0d0d;
+  --on-brand: #ffffff;
+
+  --pos: #0e9f6e;
+  --pos-soft: #e3f5ee;
+  --neg: #e5484d;
+  --neg-soft: #fdeaea;
+  --warn: #b45309;
+  --warn-soft: #fcf0dd;
+
+  color-scheme: light;
+}
+
+/* Dark — true black ground so it disappears into the Telegram chrome, with
+   near-black cards separated by a slightly lighter hairline instead of shadow
+   (shadows read as grey smudges on black). */
+:root[data-theme="dark"] {
+  --app: #000000;
+  --card: #151515;
+  --inset: #1f1f1f;
+  --ink: #ffffff;
+  --muted: #8c8c8c;
+  --line: #262626;
+  --brand: #ffffff;
+  --on-brand: #0d0d0d;
+
+  --pos: #34d399;
+  --pos-soft: #10291f;
+  --neg: #f87171;
+  --neg-soft: #2b1516;
+  --warn: #fbbf24;
+  --warn-soft: #2a1f0b;
+
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--app);
+  color: var(--ink);
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+}

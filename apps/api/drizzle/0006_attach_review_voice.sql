@@ -1,0 +1,3 @@
+ALTER TYPE "public"."bot_pending_action_type" ADD VALUE 'attach_review_voice';--> statement-breakpoint
+ALTER TABLE "bot_pending_actions" ADD COLUMN "target_submission_id" bigint;--> statement-breakpoint
+ALTER TABLE "bot_pending_actions" ADD CONSTRAINT "bot_pending_actions_target_submission_id_homework_submissions_id_fk" FOREIGN KEY ("target_submission_id") REFERENCES "public"."homework_submissions"("id") ON DELETE no action ON UPDATE no action;

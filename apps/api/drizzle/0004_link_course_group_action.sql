@@ -1,0 +1,3 @@
+ALTER TYPE "public"."bot_pending_action_type" ADD VALUE 'link_course_group';--> statement-breakpoint
+ALTER TABLE "bot_pending_actions" ADD COLUMN "target_course_id" bigint;--> statement-breakpoint
+ALTER TABLE "bot_pending_actions" ADD CONSTRAINT "bot_pending_actions_target_course_id_courses_id_fk" FOREIGN KEY ("target_course_id") REFERENCES "public"."courses"("id") ON DELETE no action ON UPDATE no action;

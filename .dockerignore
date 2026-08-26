@@ -1,0 +1,16 @@
+# Local env files must never enter the build context: Vite inlines every
+# VITE_* variable it finds into the client bundle at build time, and
+# apps/miniapp/.env.local carries a signed dev initData that would then ship
+# to production as a working auth bypass.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+node_modules
+**/node_modules
+**/dist
+.git
+.tools
+.claude
+*.bak-*

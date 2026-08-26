@@ -1,0 +1,15 @@
+{
+  "name": "course-platform",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "db:generate": "npm run db:generate --workspace=apps/api",
+    "db:migrate": "npm run db:migrate --workspace=apps/api",
+    "test:api": "bash test/e2e-staff.sh && bash test/e2e-student.sh",
+    "test:api:staff": "bash test/e2e-staff.sh",
+    "test:api:student": "bash test/e2e-student.sh"
+  }
+}

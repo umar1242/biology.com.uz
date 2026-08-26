@@ -1,0 +1,33 @@
+{
+  "name": "@course-platform/api",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "set-webhook": "tsx src/scripts/setWebhook.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@node-rs/argon2": "^2.1.0",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.12.1",
+    "fastify-plugin": "^6.0.0",
+    "grammy": "^1.45.1",
+    "jose": "^6.2.10",
+    "node-cron": "^4.6.0",
+    "postgres": "^3.4.9",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3"
+  }
+}

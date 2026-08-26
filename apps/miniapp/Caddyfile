@@ -1,0 +1,20 @@
+:80 {
+	encode gzip
+
+	# See the dashboard Caddyfile: the tunnel speaks plain HTTP to this
+	# container, so the edge's X-Forwarded-Proto is the only signal of how
+	# the visitor actually connected. Telegram opens Mini Apps over https
+	# anyway, but a hand-typed http:// link must not stay unencrypted.
+	@insecure header X-Forwarded-Proto http
+	redir @insecure https://{host}{uri} permanent
+
+	handle /api/v1/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
