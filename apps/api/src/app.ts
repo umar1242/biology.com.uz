@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
+import helmet from "@fastify/helmet";
 import { sql } from "drizzle-orm";
 import { db } from "./db/client.js";
 import authPlugin from "./plugins/auth.js";
@@ -44,9 +45,37 @@ export function buildApp() {
   // cross-origin PATCH/PUT/DELETE call with an opaque "Failed to fetch" —
   // no CORS error, no server-side log, since the browser never even sends
   // the real request once the preflight omits the method.
+  // In production both frontends are served by Caddy on the same host as
+  // the API (Caddy proxies /api/v1 to this service), so real requests are
+  // same-origin and never trigger CORS at all. Cross-origin only happens in
+  // dev, when Vite serves the app on :5173/:5174 and talks to the API on a
+  // different port. So the allowlist is exactly: the two public hosts (kept
+  // as defense-in-depth) plus the two dev origins. A request with no Origin
+  // header (curl, health checks, same-origin fetches) is allowed through.
+  const allowedOrigins = new Set([
+    "https://admin.biolog.com.uz",
+    "https://app.biolog.com.uz",
+    "http://localhost:5173",
+    "http://localhost:5174",
+  ]);
   app.register(cors, {
-    origin: true,
+    origin: (origin, cb) => {
+      if (!origin || allowedOrigins.has(origin)) cb(null, true);
+      else cb(null, false);
+    },
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  });
+
+  // Defense-in-depth headers on API responses. No contentSecurityPolicy:
+  // this service returns JSON and binary (homework photos), never HTML, so a
+  // CSP here guards nothing and risks breaking the image responses. The HTML
+  // pages — where clickjacking actually matters — are served by Caddy, which
+  // sets X-Frame-Options there (see apps/*/Caddyfile). crossOriginResourcePolicy
+  // is same-site so admin. and app. (both biolog.com.uz) can still load the
+  // photo endpoint that the dashboard fetches.
+  app.register(helmet, {
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "same-site" },
   });
 
   // Baseline flood ceiling on every route, with a much stricter per-route

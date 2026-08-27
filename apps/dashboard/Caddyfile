@@ -9,6 +9,17 @@
 	@insecure header X-Forwarded-Proto http
 	redir @insecure https://{host}{uri} permanent
 
+	# Security headers on every response. This site serves the staff
+	# panel HTML — the API's helmet only covers JSON — so X-Frame-Options
+	# must live here. DENY: the dashboard is never embedded in a frame.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
 	handle /api/v1/* {
 		reverse_proxy api:3000
 	}

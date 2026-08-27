@@ -8,6 +8,16 @@
 	@insecure header X-Forwarded-Proto http
 	redir @insecure https://{host}{uri} permanent
 
+	# Security headers. Deliberately NO X-Frame-Options / frame-ancestors:
+	# Telegram opens the Mini App inside its own iframe (web clients), and
+	# a framing restriction here would break it. The rest are safe to send.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
 	handle /api/v1/* {
 		reverse_proxy api:3000
 	}
