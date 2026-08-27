@@ -10,7 +10,15 @@ type CreatePendingActionParams =
   | { actionType: "submit_homework"; targetHomeworkId: number }
   | { actionType: "link_course_group"; targetCourseId: number }
   | { actionType: "link_staff_notifications"; targetStaffId: number }
-  | { actionType: "attach_review_voice"; targetSubmissionId: number };
+  | { actionType: "attach_review_voice"; targetSubmissionId: number }
+  | { actionType: "attach_cert_variant"; targetCertExamId: number }
+  | {
+      actionType: "submit_cert_task";
+      targetCertAttemptId: number;
+      // Which of tasks 36–43 the incoming photos belong to. Without it the
+      // bot could not tell one open task's answer from another's.
+      targetTaskNumber: number;
+    };
 
 /**
  * Issues a fresh deep link for one of the bot's "send me media next" flows.
@@ -28,6 +36,9 @@ export async function createPendingActionDeepLink(params: CreatePendingActionPar
     targetCourseId: "targetCourseId" in params ? params.targetCourseId : undefined,
     targetStaffId: "targetStaffId" in params ? params.targetStaffId : undefined,
     targetSubmissionId: "targetSubmissionId" in params ? params.targetSubmissionId : undefined,
+    targetCertExamId: "targetCertExamId" in params ? params.targetCertExamId : undefined,
+    targetCertAttemptId: "targetCertAttemptId" in params ? params.targetCertAttemptId : undefined,
+    targetTaskNumber: "targetTaskNumber" in params ? params.targetTaskNumber : undefined,
     expiresAt: new Date(Date.now() + PENDING_ACTION_TTL_MS),
   });
 

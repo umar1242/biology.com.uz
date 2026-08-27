@@ -3,6 +3,9 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import {
   botPendingActions,
+  certExamAnswers,
+  certExamAttempts,
+  certExams,
   courseAccess,
   courseTelegramGroups,
   courses,
@@ -16,6 +19,7 @@ import {
 import { hashPassword } from "../auth/password.js";
 import { loadStudentAccessibleHomeworkContext } from "../lib/studentAccess.js";
 import { t, type Language } from "../lib/i18n.js";
+import { isClosedTask } from "../lib/certExam.js";
 import { languageForTelegramUser } from "../lib/language.js";
 import { config } from "../config.js";
 import { bot } from "./bot.js";
@@ -141,6 +145,10 @@ async function claimPendingAction(
     await ctx.reply(t(lang, "notificationsLinked"));
   } else if (pending.actionType === "attach_review_voice") {
     await ctx.reply(t(lang, "sendVoice"));
+  } else if (pending.actionType === "attach_cert_variant") {
+    await ctx.reply(t(lang, "sendCertVariant"));
+  } else if (pending.actionType === "submit_cert_task") {
+    await ctx.reply(t(lang, "sendCertTaskPhotos", { task: pending.targetTaskNumber ?? 0 }));
   }
 }
 
@@ -233,7 +241,7 @@ bot.on("message:photo", async (ctx) => {
   const groupId = ctx.message.media_group_id;
 
   if (!groupId) {
-    await finalizeHomeworkSubmission(ctx, telegramId, [fileId]);
+    await routePhotos(ctx, telegramId, [fileId]);
     return;
   }
 
@@ -253,8 +261,122 @@ async function flushAlbum(groupId: string) {
   const buffered = albumBuffers.get(groupId);
   if (!buffered) return;
   albumBuffers.delete(groupId);
-  await finalizeHomeworkSubmission(buffered.ctx, buffered.telegramId, buffered.fileIds);
+  await routePhotos(buffered.ctx, buffered.telegramId, buffered.fileIds);
 }
+
+/**
+ * Photos can now belong to three different flows, so the newest claimed
+ * pending action decides. Certificate flows are checked first: a student
+ * mid-exam may also have an old, still-unconsumed homework link lying
+ * around, and silently filing exam pages as homework would be worse than
+ * either failure mode being visible.
+ */
+async function routePhotos(ctx: Context, telegramId: number, fileIds: string[]) {
+  const certTask = await findClaimedPending(telegramId, "submit_cert_task");
+  if (certTask?.targetCertAttemptId && certTask.targetTaskNumber) {
+    await finalizeCertTaskPhotos(ctx, telegramId, fileIds, certTask);
+    return;
+  }
+  const certVariant = await findClaimedPending(telegramId, "attach_cert_variant");
+  if (certVariant?.targetCertExamId) {
+    await finalizeCertVariant(ctx, telegramId, fileIds[0], null, certVariant);
+    return;
+  }
+  await finalizeHomeworkSubmission(ctx, telegramId, fileIds);
+}
+
+/** Teacher attached the variant itself — a PDF (document) or a photo of it. */
+async function finalizeCertVariant(
+  ctx: Context,
+  telegramId: number,
+  fileId: string,
+  fileName: string | null,
+  pending: { id: number; targetCertExamId: number | null },
+) {
+  if (!pending.targetCertExamId) return;
+  const lang = await languageForTelegramUser(telegramId);
+
+  await db
+    .update(certExams)
+    .set({ variantFileId: fileId, variantFileName: fileName, updatedAt: new Date() })
+    .where(eq(certExams.id, pending.targetCertExamId));
+  await db
+    .update(botPendingActions)
+    .set({ consumedAt: new Date() })
+    .where(eq(botPendingActions.id, pending.id));
+
+  await ctx.reply(t(lang, "certVariantSaved"));
+}
+
+/** Student sent the photographed solution for one open task (36–43). */
+async function finalizeCertTaskPhotos(
+  ctx: Context,
+  telegramId: number,
+  fileIds: string[],
+  pending: { id: number; targetCertAttemptId: number | null; targetTaskNumber: number | null },
+) {
+  const taskNumber = pending.targetTaskNumber;
+  const attemptId = pending.targetCertAttemptId;
+  if (!attemptId || !taskNumber || isClosedTask(taskNumber)) return;
+
+  const [student] = await db
+    .select()
+    .from(students)
+    .where(eq(students.telegramId, telegramId))
+    .limit(1);
+  if (!student) return;
+
+  const [attempt] = await db
+    .select()
+    .from(certExamAttempts)
+    .where(eq(certExamAttempts.id, attemptId))
+    .limit(1);
+  if (!attempt) return;
+
+  // Same reasoning as the homework flow: the deep link carries no identity,
+  // so whoever opens it must be re-checked against the attempt's real owner.
+  if (attempt.studentId !== student.id) {
+    await ctx.reply(t(student.language, "noCertAccess"));
+    return;
+  }
+  if (attempt.status !== "in_progress") {
+    await ctx.reply(t(student.language, "certAlreadySubmitted"));
+    return;
+  }
+
+  // Re-sending replaces that task's photos rather than appending: the
+  // student's intent when they send again is "use these instead".
+  await db
+    .insert(certExamAnswers)
+    .values({ attemptId, taskNumber, photoFileIds: fileIds })
+    .onConflictDoUpdate({
+      target: [certExamAnswers.attemptId, certExamAnswers.taskNumber],
+      set: { photoFileIds: fileIds, updatedAt: new Date() },
+    });
+  await db
+    .update(botPendingActions)
+    .set({ consumedAt: new Date() })
+    .where(eq(botPendingActions.id, pending.id));
+
+  await ctx.reply(
+    t(student.language, "certTaskAccepted", { task: taskNumber, count: fileIds.length }),
+  );
+}
+
+// The variant is normally a PDF, which arrives as a document, not a photo.
+bot.on("message:document", async (ctx) => {
+  const telegramId = ctx.from.id;
+  const pending = await findClaimedPending(telegramId, "attach_cert_variant");
+  if (!pending?.targetCertExamId) return void (await replyNoPendingAction(ctx));
+
+  await finalizeCertVariant(
+    ctx,
+    telegramId,
+    ctx.message.document.file_id,
+    ctx.message.document.file_name ?? null,
+    pending,
+  );
+});
 
 async function finalizeHomeworkSubmission(ctx: Context, telegramId: number, fileIds: string[]) {
   const pending = await findClaimedPending(telegramId, "submit_homework");
@@ -316,7 +438,12 @@ async function replyNoPendingAction(ctx: Context) {
 
 async function findClaimedPending(
   telegramId: number,
-  actionType: "attach_lesson_recording" | "submit_homework" | "attach_review_voice",
+  actionType:
+    | "attach_lesson_recording"
+    | "submit_homework"
+    | "attach_review_voice"
+    | "attach_cert_variant"
+    | "submit_cert_task",
 ) {
   const [pending] = await db
     .select()

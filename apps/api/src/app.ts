@@ -16,10 +16,12 @@ import studentRoutes from "./routes/students.js";
 import settingsRoutes from "./routes/settings.js";
 import assistantRoutes from "./routes/assistants.js";
 import dashboardRoutes from "./routes/dashboard.js";
+import certExamRoutes from "./routes/certExams.js";
 import appAuthRoutes from "./routes/app/auth.js";
 import appCourseRoutes from "./routes/app/courses.js";
 import appHomeworkRoutes from "./routes/app/homework.js";
 import appProfileRoutes from "./routes/app/profile.js";
+import appCertExamRoutes from "./routes/app/certExams.js";
 import webhookRoutes from "./telegram/webhook.js";
 import { AppError, NotFound } from "./lib/errors.js";
 
@@ -192,10 +194,12 @@ export function buildApp() {
   app.register(settingsRoutes, { prefix: "/api/v1" });
   app.register(assistantRoutes, { prefix: "/api/v1" });
   app.register(dashboardRoutes, { prefix: "/api/v1" });
+  app.register(certExamRoutes, { prefix: "/api/v1" });
   app.register(appAuthRoutes, { prefix: "/api/v1" });
   app.register(appCourseRoutes, { prefix: "/api/v1" });
   app.register(appHomeworkRoutes, { prefix: "/api/v1" });
   app.register(appProfileRoutes, { prefix: "/api/v1" });
+  app.register(appCertExamRoutes, { prefix: "/api/v1" });
   app.register(webhookRoutes);
 
   return app;

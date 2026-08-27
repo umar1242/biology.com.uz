@@ -36,3 +36,20 @@ export async function apiFetch<T>(
   }
   return body as T;
 }
+
+/**
+ * Binary GET (the variant PDF, homework photos) as an object URL. The raw
+ * endpoints require the Bearer token, so a plain <a href> or <img src>
+ * would come back 401 — the bytes have to be fetched, then wrapped.
+ * Callers own the returned URL and must revokeObjectURL it.
+ */
+export async function apiFetchObjectUrl(path: string): Promise<string> {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, "fetch_failed", "Could not load file");
+  }
+  return URL.createObjectURL(await res.blob());
+}

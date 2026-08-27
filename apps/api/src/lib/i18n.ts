@@ -53,6 +53,14 @@ const STRINGS = {
     ru: "Отправьте голосовое сообщение — оно будет прикреплено как комментарий к сдаче.",
     uz: "Ovozli xabar yuboring — u topshiriqqa izoh sifatida biriktiriladi.",
   },
+  sendCertVariant: {
+    ru: "Отправьте файл варианта (PDF или фото) — он будет прикреплён к сертификатному экзамену.",
+    uz: "Variant faylini (PDF yoki rasm) yuboring — u sertifikat imtihoniga biriktiriladi.",
+  },
+  sendCertTaskPhotos: {
+    ru: "Отправьте фото решения задания №{task} — можно несколько одним альбомом.",
+    uz: "№{task} topshiriq yechimining rasmini yuboring — bir nechta albom qilib ham bo'ladi.",
+  },
   linkGroupInstructions: {
     ru: "Готово. Теперь добавьте бота в Telegram-группу курса и отправьте там команду:\n/link_{token}",
     uz: "Tayyor. Endi botni kursning Telegram guruhiga qo'shing va u yerda buyruqni yuboring:\n/link_{token}",
@@ -82,6 +90,22 @@ const STRINGS = {
     uz: "Qabul qilindi! Yuborilgan rasmlar: {count}. O'qituvchi tekshiruvini kuting.",
   },
   groupLinked: { ru: "Группа привязана к курсу ✅", uz: "Guruh kursga bog'landi ✅" },
+  certVariantSaved: {
+    ru: "Файл варианта сохранён ✅ Теперь заполните ключ ответов 1–35 в дашборде.",
+    uz: "Variant fayli saqlandi ✅ Endi boshqaruv panelida 1–35 javoblar kalitini to'ldiring.",
+  },
+  certTaskAccepted: {
+    ru: "Принято! Задание №{task}, фото: {count}. Можно отправлять следующее задание.",
+    uz: "Qabul qilindi! №{task} topshiriq, rasmlar: {count}. Keyingi topshiriqni yuborishingiz mumkin.",
+  },
+  noCertAccess: {
+    ru: "У вас нет доступа к этому варианту.",
+    uz: "Sizda bu variantga ruxsat yo'q.",
+  },
+  certAlreadySubmitted: {
+    ru: "Этот вариант уже сдан — изменить ответы нельзя.",
+    uz: "Bu variant allaqachon topshirilgan — javoblarni o'zgartirib bo'lmaydi.",
+  },
 
   // --- review verdict to student ---
   verdictPassed: { ru: "✅ ДЗ принято", uz: "✅ Uy vazifasi qabul qilindi" },

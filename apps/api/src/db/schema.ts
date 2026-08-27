@@ -50,6 +50,11 @@ export const disciplinaryEventTypeEnum = pgEnum("disciplinary_event_type", [
   "manual_blacklist",
   "manual_blacklist_clear",
 ]);
+export const certExamAttemptStatusEnum = pgEnum("cert_exam_attempt_status", [
+  "in_progress",
+  "submitted",
+  "reviewed",
+]);
 export const notificationRecipientTypeEnum = pgEnum("notification_recipient_type", [
   "student",
   "staff",
@@ -73,6 +78,8 @@ export const botPendingActionTypeEnum = pgEnum("bot_pending_action_type", [
   "link_course_group",
   "link_staff_notifications",
   "attach_review_voice",
+  "attach_cert_variant",
+  "submit_cert_task",
 ]);
 
 // ---------------------------------------------------------------------
@@ -484,6 +491,13 @@ export const botPendingActions = pgTable(
     targetSubmissionId: bigint("target_submission_id", { mode: "number" }).references(
       () => homeworkSubmissions.id,
     ),
+    targetCertExamId: bigint("target_cert_exam_id", { mode: "number" }).references(
+      () => certExams.id,
+    ),
+    targetCertAttemptId: bigint("target_cert_attempt_id", { mode: "number" }).references(
+      () => certExamAttempts.id,
+    ),
+    targetTaskNumber: integer("target_task_number"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
@@ -530,6 +544,143 @@ export const notificationsLog = pgTable(
       "exactly_one_recipient",
       sql`(${table.recipientType} = 'student' AND ${table.recipientStudentId} IS NOT NULL AND ${table.recipientStaffId} IS NULL)
         OR (${table.recipientType} = 'staff' AND ${table.recipientStaffId} IS NOT NULL AND ${table.recipientStudentId} IS NULL)`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------
+// 11. Certificate exam (Milliy Sertifikat variants)
+// ---------------------------------------------------------------------
+// A variant is 43 tasks with a fixed shape defined by the state spec —
+// see lib/certExam.ts for the ranges and point weights. Only 1–35 have a
+// machine-checkable key; 36–43 are photographed solutions a teacher grades
+// by hand, which is why the answer row carries both shapes.
+
+export const certExams = pgTable(
+  "cert_exams",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    courseId: bigint("course_id", { mode: "number" })
+      .notNull()
+      .references(() => courses.id),
+    teacherId: bigint("teacher_id", { mode: "number" })
+      .notNull()
+      .references(() => teachers.staffUserId),
+    title: text("title").notNull(),
+    // The variant itself is a PDF/photo the teacher sends through the bot,
+    // stored as a Telegram file_id like every other media in this project.
+    variantFileId: text("variant_file_id"),
+    variantFileName: text("variant_file_name"),
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }).notNull(),
+    // NULL = draft. A variant stays invisible to students until the teacher
+    // has both attached the file and filled all 35 key entries.
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_cert_exams_course").on(table.courseId),
+    index("idx_cert_exams_deadline").on(table.deadlineAt),
+  ],
+);
+
+export const certExamAnswerKeys = pgTable(
+  "cert_exam_answer_keys",
+  {
+    examId: bigint("exam_id", { mode: "number" })
+      .notNull()
+      .references(() => certExams.id, { onDelete: "cascade" }),
+    taskNumber: integer("task_number").notNull(),
+    correctOption: text("correct_option").notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "cert_exam_answer_keys_pk", columns: [table.examId, table.taskNumber] }),
+    check("cert_key_task_range", sql`${table.taskNumber} BETWEEN 1 AND 35`),
+    // 1–32 are A–D; 33–35 share a six-option pool A–F (spec §IV, Y2).
+    check(
+      "cert_key_option_valid",
+      sql`(${table.taskNumber} <= 32 AND ${table.correctOption} IN ('A','B','C','D'))
+        OR (${table.taskNumber} >= 33 AND ${table.correctOption} IN ('A','B','C','D','E','F'))`,
+    ),
+  ],
+);
+
+export const certExamAttempts = pgTable(
+  "cert_exam_attempts",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    examId: bigint("exam_id", { mode: "number" })
+      .notNull()
+      .references(() => certExams.id),
+    studentId: bigint("student_id", { mode: "number" })
+      .notNull()
+      .references(() => students.id),
+    teacherId: bigint("teacher_id", { mode: "number" })
+      .notNull()
+      .references(() => teachers.staffUserId),
+    attemptNumber: integer("attempt_number").notNull(),
+    status: certExamAttemptStatusEnum("status").notNull().default("in_progress"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    // Frozen at submit time against the deadline as it stood then — same
+    // reasoning as homework_submissions.is_late.
+    isLate: boolean("is_late"),
+    autoScore: integer("auto_score"),
+    manualScore: integer("manual_score"),
+    totalScore: integer("total_score"),
+    reviewedBy: bigint("reviewed_by", { mode: "number" }).references(() => staffUsers.id),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewCommentText: text("review_comment_text"),
+  },
+  (table) => [
+    uniqueIndex("cert_attempts_unique").on(table.examId, table.studentId, table.attemptNumber),
+    index("idx_cert_attempts_exam_student").on(table.examId, table.studentId),
+    index("idx_cert_attempts_pending_review")
+      .on(table.examId)
+      .where(sql`${table.status} = 'submitted'`),
+    check(
+      "cert_attempt_submitted_consistent",
+      sql`(${table.status} = 'in_progress' AND ${table.submittedAt} IS NULL)
+        OR (${table.status} IN ('submitted','reviewed') AND ${table.submittedAt} IS NOT NULL)`,
+    ),
+    check(
+      "cert_attempt_reviewed_consistent",
+      sql`(${table.status} <> 'reviewed' AND ${table.reviewedBy} IS NULL AND ${table.reviewedAt} IS NULL)
+        OR (${table.status} = 'reviewed' AND ${table.reviewedBy} IS NOT NULL AND ${table.reviewedAt} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const certExamAnswers = pgTable(
+  "cert_exam_answers",
+  {
+    attemptId: bigint("attempt_id", { mode: "number" })
+      .notNull()
+      .references(() => certExamAttempts.id, { onDelete: "cascade" }),
+    taskNumber: integer("task_number").notNull(),
+    // Closed tasks (1–35): the picked letter, and the verdict frozen at
+    // submit time so a later key correction can't silently rewrite history.
+    chosenOption: text("chosen_option"),
+    isCorrect: boolean("is_correct"),
+    // Open tasks (36–43): photographed solution + the teacher's points.
+    photoFileIds: text("photo_file_ids").array(),
+    awardedPoints: integer("awarded_points"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ name: "cert_exam_answers_pk", columns: [table.attemptId, table.taskNumber] }),
+    check("cert_answer_task_range", sql`${table.taskNumber} BETWEEN 1 AND 43`),
+    check(
+      "cert_answer_closed_shape",
+      sql`${table.taskNumber} > 35 OR (${table.photoFileIds} IS NULL AND ${table.awardedPoints} IS NULL)`,
+    ),
+    check(
+      "cert_answer_open_shape",
+      sql`${table.taskNumber} <= 35 OR (${table.chosenOption} IS NULL AND ${table.isCorrect} IS NULL)`,
+    ),
+    check(
+      "cert_answer_points_nonnegative",
+      sql`${table.awardedPoints} IS NULL OR ${table.awardedPoints} >= 0`,
     ),
   ],
 );

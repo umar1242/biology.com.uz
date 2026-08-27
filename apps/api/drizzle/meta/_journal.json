@@ -57,6 +57,13 @@
       "when": 1787737266029,
       "tag": "0007_add_language",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787823600000,
+      "tag": "0008_cert_exams",
+      "breakpoints": true
     }
   ]
 }

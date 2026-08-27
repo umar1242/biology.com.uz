@@ -9,6 +9,8 @@ import { LessonDetailPage } from "./pages/LessonDetail";
 import { HomeworkListPage } from "./pages/HomeworkList";
 import { HomeworkDetailPage } from "./pages/HomeworkDetail";
 import { ProfilePage } from "./pages/Profile";
+import { CertListPage } from "./pages/CertList";
+import { CertExamPage } from "./pages/CertExam";
 import { useAuth } from "./lib/auth";
 import { useI18n, type StringKey } from "./lib/i18n";
 
@@ -48,6 +50,8 @@ export default function App() {
           <Route path="/lessons/:id" element={<LessonDetailPage />} />
           <Route path="/homework" element={<HomeworkListPage />} />
           <Route path="/homework/:id" element={<HomeworkDetailPage />} />
+          <Route path="/cert" element={<CertListPage />} />
+          <Route path="/cert/:id" element={<CertExamPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

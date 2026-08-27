@@ -6,6 +6,9 @@ import { CourseDetailPage } from "./pages/CourseDetail";
 import { ModuleDetailPage } from "./pages/ModuleDetail";
 import { LessonDetailPage } from "./pages/LessonDetail";
 import { ReviewPage } from "./pages/Review";
+import { CertExamsPage } from "./pages/CertExams";
+import { CertExamAttemptsPage } from "./pages/CertExamAttempts";
+import { CertAttemptPage } from "./pages/CertAttempt";
 import { StudentsPage } from "./pages/Students";
 import { AssistantsPage } from "./pages/Assistants";
 import { SettingsPage } from "./pages/Settings";
@@ -24,6 +27,9 @@ export default function App() {
           <Route path="/courses/:courseId/modules/:moduleId" element={<ModuleDetailPage />} />
           <Route path="/lessons/:id" element={<LessonDetailPage />} />
           <Route path="/review" element={<ReviewPage />} />
+          <Route path="/cert" element={<CertExamsPage />} />
+          <Route path="/cert/:id" element={<CertExamAttemptsPage />} />
+          <Route path="/cert/attempts/:id" element={<CertAttemptPage />} />
           <Route path="/students" element={<StudentsPage />} />
           <Route path="/assistants" element={<AssistantsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
