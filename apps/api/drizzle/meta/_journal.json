@@ -78,6 +78,13 @@
       "when": 1787840000000,
       "tag": "0010_cert_item_bank",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787850000000,
+      "tag": "0011_cert_item_card",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,7 @@ import { CertExamsPage } from "./pages/CertExams";
 import { CertExamAttemptsPage } from "./pages/CertExamAttempts";
 import { CertAttemptPage } from "./pages/CertAttempt";
 import { ItemBankPage } from "./pages/ItemBank";
+import { ItemCardPage } from "./pages/ItemCard";
 import { StudentsPage } from "./pages/Students";
 import { AssistantsPage } from "./pages/Assistants";
 import { SettingsPage } from "./pages/Settings";
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/cert/:id" element={<CertExamAttemptsPage />} />
           <Route path="/cert/attempts/:id" element={<CertAttemptPage />} />
           <Route path="/bank" element={<ItemBankPage />} />
+          <Route path="/bank/:id" element={<ItemCardPage />} />
           <Route path="/students" element={<StudentsPage />} />
           <Route path="/assistants" element={<AssistantsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

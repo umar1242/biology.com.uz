@@ -8,6 +8,7 @@ import {
   certExamItems,
   certExams,
   certItems,
+  staffUsers,
   students,
 } from "../db/schema.js";
 import { requireAuth, requireTeacher } from "../plugins/auth.js";
@@ -18,13 +19,19 @@ import { fetchTelegramFile } from "../telegram/client.js";
 import {
   AUTO_MAX_POINTS,
   KEY_TASK_NUMBERS,
+  DISCRIMINATION_GROUP_SHARE,
+  MIN_ATTEMPTS_FOR_DISCRIMINATION,
   RECOMMENDED_ANCHOR_COUNT,
+  DEAD_DISTRACTOR_SHARE,
+  discriminationBand,
+  itemCode,
+  taskTypeFor,
+  topicFor,
   PHOTO_TASK_NUMBERS,
   TOTAL_MAX_POINTS,
   isClosedTask,
   maxPointsFor,
   optionsFor,
-  topicFor,
 } from "../lib/certExam.js";
 
 const createSchema = z.object({
@@ -61,6 +68,11 @@ const updateItemSchema = z.object({
   correct_option: z.string().min(1).max(1).optional(),
   source_ref: z.string().min(1).max(200).nullable().optional(),
   topic: z.string().min(1).max(40).optional(),
+  stem_text: z.string().max(4000).nullable().optional(),
+  author: z.string().max(200).nullable().optional(),
+  cognitive_level: z.union([z.literal(1), z.literal(2)]).nullable().optional(),
+  status: z.enum(["active", "retired"]).optional(),
+  notes: z.string().max(2000).nullable().optional(),
 });
 
 const reviewSchema = z.object({
@@ -120,6 +132,97 @@ async function anchorCountFor(examId: number): Promise<number> {
       ),
     );
   return row?.n ?? 0;
+}
+
+
+/**
+ * Discrimination per item, computed inside each variant and then pooled.
+ *
+ * Ranking has to happen within one variant: totals from different variants
+ * are not comparable until their scales are linked by anchors, so pooling
+ * the raw scores first would rank a weak student on an easy variant above a
+ * strong one on a hard variant and corrupt every D at once.
+ */
+async function discriminationByItem(teacherId: number): Promise<Map<number, number>> {
+  const rows = await db
+    .select({
+      itemId: certExamAnswers.itemId,
+      attemptId: certExamAnswers.attemptId,
+      examId: certExamAttempts.examId,
+      autoScore: certExamAttempts.autoScore,
+      isCorrect: certExamAnswers.isCorrect,
+      awardedPoints: certExamAnswers.awardedPoints,
+      taskNumber: certExamAnswers.taskNumber,
+    })
+    .from(certExamAnswers)
+    .innerJoin(certExamAttempts, eq(certExamAttempts.id, certExamAnswers.attemptId))
+    .innerJoin(certItems, eq(certItems.id, certExamAnswers.itemId))
+    .where(
+      and(
+        eq(certItems.teacherId, teacherId),
+        sql`${certExamAttempts.status} IN ('submitted','reviewed')`,
+        sql`${certExamAnswers.itemId} IS NOT NULL`,
+      ),
+    );
+
+  // exam -> attempt -> rank basis, and exam -> item -> per-attempt outcome
+  const attemptScore = new Map<string, number>();
+  const byExam = new Map<number, Map<number, Map<number, boolean>>>();
+
+  for (const r of rows) {
+    if (r.itemId === null) continue;
+    // 41–43 are polytomous; a binary "solved it" does not exist for them.
+    if (r.taskNumber > 40) continue;
+
+    const solved = isClosedTask(r.taskNumber)
+      ? r.isCorrect
+      : r.awardedPoints === null
+        ? null
+        : r.awardedPoints >= 1;
+    if (solved === null) continue;
+
+    attemptScore.set(`${r.examId}:${r.attemptId}`, r.autoScore ?? 0);
+    const items = byExam.get(r.examId) ?? new Map();
+    byExam.set(r.examId, items);
+    const perAttempt = items.get(r.itemId) ?? new Map<number, boolean>();
+    items.set(r.itemId, perAttempt);
+    perAttempt.set(r.attemptId, solved);
+  }
+
+  // item -> [sum of D weighted by group size, total weight]
+  const pooled = new Map<number, [number, number]>();
+
+  for (const [examId, items] of byExam) {
+    const attempts = [
+      ...new Set([...items.values()].flatMap((m) => [...m.keys()])),
+    ].sort(
+      (a, b) =>
+        (attemptScore.get(`${examId}:${b}`) ?? 0) - (attemptScore.get(`${examId}:${a}`) ?? 0),
+    );
+    if (attempts.length < MIN_ATTEMPTS_FOR_DISCRIMINATION) continue;
+
+    const groupSize = Math.max(1, Math.round(attempts.length * DISCRIMINATION_GROUP_SHARE));
+    const top = attempts.slice(0, groupSize);
+    const bottom = attempts.slice(-groupSize);
+
+    for (const [itemId, perAttempt] of items) {
+      const share = (group: number[]) => {
+        const seen = group.filter((a) => perAttempt.has(a));
+        if (seen.length === 0) return null;
+        return seen.filter((a) => perAttempt.get(a)).length / seen.length;
+      };
+      const pTop = share(top);
+      const pBottom = share(bottom);
+      if (pTop === null || pBottom === null) continue;
+
+      const [sum, weight] = pooled.get(itemId) ?? [0, 0];
+      pooled.set(itemId, [sum + (pTop - pBottom) * groupSize, weight + groupSize]);
+    }
+  }
+
+  return new Map(
+    [...pooled].map(([itemId, [sum, weight]]) => [itemId, weight > 0 ? sum / weight : 0]),
+  );
 }
 
 /** Shape returned for a single exam, including how ready it is to publish. */
@@ -224,6 +327,8 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       )
       .groupBy(certExamAnswers.itemId, certExamAnswers.chosenOption);
 
+    const discrimination = await discriminationByItem(auth.teacherId);
+
     const topChoice = new Map<number, { option: string; n: number }>();
     for (const d of distribution) {
       if (d.itemId === null || d.option === null) continue;
@@ -239,6 +344,8 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       const avgShare =
         !closed && r.pointsGraded > 0 ? r.pointsAwarded / (r.pointsGraded * maxPoints) : null;
 
+      const d = discrimination.get(r.id) ?? null;
+
       return {
         id: r.id,
         task_number: r.taskNumber,
@@ -253,6 +360,10 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         // until anyone has actually been graded on it.
         p_value: closed ? pValue : avgShare,
         most_chosen: top?.option ?? null,
+        // How much better the strong half does than the weak half. null
+        // until some variant has enough graded attempts to rank within.
+        discrimination: d,
+        discrimination_band: d === null ? null : discriminationBand(d),
         // Deliberately conservative: a handful of responses is noise, and a
         // flag a teacher learns to ignore is worse than no flag.
         suspect_key:
@@ -263,6 +374,177 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
           top.n / r.responses >= 0.5,
       };
     });
+  });
+
+
+  /**
+   * Full card for one question: identity, content, who wrote it, and every
+   * statistic the stored answers support — including how each option
+   * performed, which is where most of the diagnostic value sits. A bare
+   * "45% correct" says the question is hard; the per-option split says
+   * *why*, and often that the key is on the wrong letter.
+   */
+  app.get("/cert-items/:id/card", async (request) => {
+    const auth = requireAuth(request);
+    const itemId = Number((request.params as { id: string }).id);
+
+    const [item] = await db.select().from(certItems).where(eq(certItems.id, itemId)).limit(1);
+    if (!item || item.teacherId !== auth.teacherId) throw NotFound("Item not found");
+
+    const [author] = item.createdBy
+      ? await db
+          .select({ name: staffUsers.displayName })
+          .from(staffUsers)
+          .where(eq(staffUsers.id, item.createdBy))
+          .limit(1)
+      : [undefined];
+
+    // Every graded answer to this question, with the attempt it came from.
+    const answers = await db
+      .select({
+        attemptId: certExamAnswers.attemptId,
+        examId: certExamAttempts.examId,
+        autoScore: certExamAttempts.autoScore,
+        chosen: certExamAnswers.chosenOption,
+        isCorrect: certExamAnswers.isCorrect,
+        awarded: certExamAnswers.awardedPoints,
+        answeredAt: certExamAnswers.updatedAt,
+      })
+      .from(certExamAnswers)
+      .innerJoin(certExamAttempts, eq(certExamAttempts.id, certExamAnswers.attemptId))
+      .where(
+        and(
+          eq(certExamAnswers.itemId, itemId),
+          sql`${certExamAttempts.status} IN ('submitted','reviewed')`,
+        ),
+      );
+
+    const closed = isClosedTask(item.taskNumber);
+    const graded = answers.filter((a) => (closed ? a.isCorrect !== null : a.awarded !== null));
+    const correct = graded.filter((a) =>
+      closed ? a.isCorrect === true : (a.awarded ?? 0) >= 1,
+    ).length;
+
+    // Rank within each variant, never across: totals from different variants
+    // sit on different scales until anchors link them.
+    const byExam = new Map<number, typeof graded>();
+    for (const a of graded) {
+      const list = byExam.get(a.examId) ?? [];
+      list.push(a);
+      byExam.set(a.examId, list);
+    }
+    const strongAttempts = new Set<number>();
+    const weakAttempts = new Set<number>();
+    for (const list of byExam.values()) {
+      if (list.length < MIN_ATTEMPTS_FOR_DISCRIMINATION) continue;
+      const sorted = [...list].sort((x, y) => (y.autoScore ?? 0) - (x.autoScore ?? 0));
+      const g = Math.max(1, Math.round(sorted.length * DISCRIMINATION_GROUP_SHARE));
+      sorted.slice(0, g).forEach((a) => strongAttempts.add(a.attemptId));
+      sorted.slice(-g).forEach((a) => weakAttempts.add(a.attemptId));
+    }
+
+    // Per-option breakdown. A distractor that only the weak pick is doing its
+    // job; one that the strong pick more than the key is a warning sign.
+    const optionRows = optionsFor(item.taskNumber).map((opt) => {
+      const picked = graded.filter((a) => a.chosen === opt);
+      const strong = [...strongAttempts].filter((id) =>
+        graded.some((a) => a.attemptId === id && a.chosen === opt),
+      ).length;
+      const weak = [...weakAttempts].filter((id) =>
+        graded.some((a) => a.attemptId === id && a.chosen === opt),
+      ).length;
+      const share = graded.length > 0 ? picked.length / graded.length : 0;
+      return {
+        option: opt,
+        is_key: opt === item.correctOption,
+        count: picked.length,
+        share,
+        strong_count: strong,
+        weak_count: weak,
+        // Nobody picks it, so the question is really a 3-choice one and a
+        // lucky guess pays better than the format intends.
+        dead: !!(graded.length >= 10 && opt !== item.correctOption && share < DEAD_DISTRACTOR_SHARE),
+      };
+    });
+
+    const blank = graded.filter((a) => closed && a.chosen === null).length;
+    const pValue = graded.length > 0 ? correct / graded.length : null;
+    const discrimination = (await discriminationByItem(auth.teacherId)).get(itemId) ?? null;
+
+    // Which variants it has appeared in, and how it behaved in each. A large
+    // jump between administrations usually means the group improved — or
+    // that the variant leaked.
+    const usageRows = await db
+      .select({
+        examId: certExams.id,
+        title: certExams.title,
+        publishedAt: certExams.publishedAt,
+        deadlineAt: certExams.deadlineAt,
+      })
+      .from(certExamItems)
+      .innerJoin(certExams, eq(certExams.id, certExamItems.examId))
+      .where(eq(certExamItems.itemId, itemId))
+      .orderBy(certExams.createdAt);
+
+    const usage = usageRows.map((u) => {
+      const list = byExam.get(u.examId) ?? [];
+      const ok = list.filter((a) => (closed ? a.isCorrect === true : (a.awarded ?? 0) >= 1)).length;
+      return {
+        exam_id: u.examId,
+        exam_title: u.title,
+        published_at: u.publishedAt,
+        deadline_at: u.deadlineAt,
+        responses: list.length,
+        p_value: list.length > 0 ? ok / list.length : null,
+      };
+    });
+
+    const flags: string[] = [];
+    const top = [...optionRows].sort((a, b) => b.count - a.count)[0];
+    if (closed && graded.length >= 8 && top && !top.is_key && top.share >= 0.5) {
+      flags.push("suspect_key");
+    }
+    if (discrimination !== null && discrimination < 0) flags.push("negative_discrimination");
+    if (pValue !== null && graded.length >= 10 && pValue > 0.85) flags.push("too_easy");
+    if (pValue !== null && graded.length >= 10 && pValue < 0.3) flags.push("too_hard");
+    if (optionRows.some((o) => o.dead)) flags.push("dead_distractor");
+    if (item.keyRevisedAt && graded.some((a) => a.answeredAt < item.keyRevisedAt!)) {
+      flags.push("key_revised_mid_flight");
+    }
+
+    return {
+      id: item.id,
+      code: itemCode(item.id, item.taskNumber),
+      task_number: item.taskNumber,
+      task_type: taskTypeFor(item.taskNumber),
+      topic: item.topic,
+      cognitive_level: item.cognitiveLevel,
+      source_ref: item.sourceRef,
+      author: item.author,
+      stem_text: item.stemText,
+      notes: item.notes,
+      status: item.status,
+      correct_option: item.correctOption,
+      options: optionsFor(item.taskNumber),
+      is_closed: closed,
+      max_points: maxPointsFor(item.taskNumber),
+      created_at: item.createdAt,
+      updated_at: item.updatedAt,
+      key_revised_at: item.keyRevisedAt,
+      entered_by: author?.name ?? null,
+      stats: {
+        responses: graded.length,
+        correct,
+        blank,
+        p_value: pValue,
+        discrimination,
+        discrimination_band: discrimination === null ? null : discriminationBand(discrimination),
+        min_responses_for_verdict: MIN_ATTEMPTS_FOR_DISCRIMINATION,
+        options: optionRows,
+      },
+      usage,
+      flags,
+    };
   });
 
   app.patch("/cert-items/:id", async (request) => {
@@ -285,6 +567,23 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    // Correcting a key after students have answered means the statistics
+    // straddle two different definitions of "correct". Record when it
+    // happened so the card can say so instead of quietly averaging.
+    const keyChanged =
+      body.data.correct_option !== undefined &&
+      body.data.correct_option.toUpperCase() !== item.correctOption;
+    let hadAnswers = false;
+    if (keyChanged) {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(certExamAnswers)
+        .where(
+          and(eq(certExamAnswers.itemId, itemId), sql`${certExamAnswers.isCorrect} IS NOT NULL`),
+        );
+      hadAnswers = (row?.n ?? 0) > 0;
+    }
+
     const [updated] = await db
       .update(certItems)
       .set({
@@ -293,6 +592,14 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
           : {}),
         ...(body.data.source_ref !== undefined ? { sourceRef: body.data.source_ref } : {}),
         ...(body.data.topic !== undefined ? { topic: body.data.topic } : {}),
+        ...(body.data.stem_text !== undefined ? { stemText: body.data.stem_text } : {}),
+        ...(body.data.author !== undefined ? { author: body.data.author } : {}),
+        ...(body.data.cognitive_level !== undefined
+          ? { cognitiveLevel: body.data.cognitive_level }
+          : {}),
+        ...(body.data.status !== undefined ? { status: body.data.status } : {}),
+        ...(body.data.notes !== undefined ? { notes: body.data.notes } : {}),
+        ...(keyChanged && hadAnswers ? { keyRevisedAt: new Date() } : {}),
         updatedAt: new Date(),
       })
       .where(eq(certItems.id, itemId))
@@ -304,6 +611,12 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       correct_option: updated.correctOption,
       source_ref: updated.sourceRef,
       topic: updated.topic,
+      stem_text: updated.stemText,
+      author: updated.author,
+      cognitive_level: updated.cognitiveLevel,
+      status: updated.status,
+      notes: updated.notes,
+      key_revised_at: updated.keyRevisedAt,
     };
   });
 
@@ -497,6 +810,7 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
               correctOption: option,
               topic: topicFor(a.task_number),
               sourceRef: a.source_ref ?? null,
+              createdBy: auth.staffId,
             })
             .returning();
           itemId = created.id;
@@ -527,6 +841,7 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
             taskNumber: n,
             correctOption: null,
             topic: topicFor(n),
+            createdBy: auth.staffId,
           })
           .returning();
         await tx

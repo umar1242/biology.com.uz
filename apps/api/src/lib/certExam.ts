@@ -115,3 +115,74 @@ export function topicFor(n: number): CertTopic {
  * legitimate choice, it just cannot be linked to the others.
  */
 export const RECOMMENDED_ANCHOR_COUNT = 8;
+
+/**
+ * Discrimination index D — how much better the strong half of a group does
+ * on a question than the weak half. Kelley's classic upper/lower 27% split:
+ * D = share correct among the top 27% − share among the bottom 27%.
+ *
+ * Chosen over the point-biserial correlation because it says something a
+ * teacher can act on directly ("the strong solve it 40% more often"), and
+ * because it is the exact quantity that separates two questions with an
+ * identical share correct: one that sorts students and one that is a
+ * coin flip.
+ *
+ * A NEGATIVE D means weak students outperform strong ones — nearly always a
+ * wrong key or an ambiguous question, and a signal independent of the
+ * most-chosen-option check.
+ */
+export const DISCRIMINATION_GROUP_SHARE = 0.27;
+
+/**
+ * Below this many graded attempts in one variant, D is noise wearing a
+ * number's clothes. With g examinees per group its standard error is about
+ * sqrt(2·p(1−p)/g): at 10 attempts the groups hold 3 people, the scale moves
+ * in steps of 0.33 and the error is ±0.4 — wider than the entire useful
+ * range, so a perfectly ordinary question drifts negative and gets accused
+ * of having a broken key. At 30 the error is ±0.25, at the 100–150 a whole
+ * group actually produces it is ±0.11.
+ */
+export const MIN_ATTEMPTS_FOR_DISCRIMINATION = 30;
+
+export type DiscriminationBand = "good" | "ok" | "weak" | "broken";
+
+/**
+ * "broken" is a strong accusation — it tells the teacher the key is probably
+ * wrong — so it needs a reversal clearly past the noise floor, not merely a
+ * negative sign. Everything between that and 0.2 is "weak": the question
+ * does not sort students, which is worth knowing but is not an error.
+ */
+const BROKEN_BELOW = -0.15;
+
+export function discriminationBand(d: number): DiscriminationBand {
+  if (d < BROKEN_BELOW) return "broken";
+  if (d < 0.2) return "weak";
+  if (d < 0.35) return "ok";
+  return "good";
+}
+
+/**
+ * The specification's own type codes (§III): Y1 closed with one answer,
+ * Y2 closed matching, O1 open short answer, O2 open extended written work.
+ * Derived from the position, because the spec fixes which type sits where.
+ */
+export type CertTaskType = "Y1" | "Y2" | "O1" | "O2";
+
+export function taskTypeFor(n: number): CertTaskType {
+  if (n <= 32) return "Y1";
+  if (n <= 35) return "Y2";
+  if (n <= 40) return "O1";
+  return "O2";
+}
+
+/**
+ * A distractor nobody picks is not doing any work: the question is
+ * effectively a 3-choice item, which raises the odds of a lucky guess from
+ * 25% to 33%. Worth flagging so the option can be rewritten.
+ */
+export const DEAD_DISTRACTOR_SHARE = 0.05;
+
+/** Human-readable item code shown on the card and cited in discussion. */
+export function itemCode(id: number, taskNumber: number): string {
+  return `${taskNumber}-${String(id).padStart(4, "0")}`;
+}

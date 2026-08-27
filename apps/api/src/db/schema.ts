@@ -614,11 +614,36 @@ export const certItems = pgTable(
     // same source the platform treats them as one question, which is what
     // makes statistics add up instead of splitting.
     sourceRef: text("source_ref"),
+    // The question itself. Optional: the variant is already attached as a
+    // file, and retyping 43 stems per variant is work the teacher may not
+    // want. Filled in, it makes the bank searchable and reusable on its own.
+    stemText: text("stem_text"),
+    // Who wrote the question — usually the textbook's authors, not the
+    // staff member who typed it in (that is created_by).
+    author: text("author"),
+    // Spec §VI: I lower cognitive level, II higher. Not derivable from the
+    // position, so the teacher sets it.
+    cognitiveLevel: integer("cognitive_level"),
+    // Retire rather than delete: a bad question's history is what explains
+    // past results, and deleting it would silently rewrite them.
+    status: text("status").notNull().default("active"),
+    notes: text("notes"),
+    createdBy: bigint("created_by", { mode: "number" }).references(() => staffUsers.id),
+    // Set when the key is corrected after answers already existed. Statistics
+    // from before and after that moment are not comparable, and the card has
+    // to say so rather than averaging across the change.
+    keyRevisedAt: timestamp("key_revised_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("idx_cert_items_teacher").on(table.teacherId, table.taskNumber),
+    index("idx_cert_items_status").on(table.teacherId, table.status),
+    check("cert_item_status_valid", sql`${table.status} IN ('active','retired')`),
+    check(
+      "cert_item_cognitive_valid",
+      sql`${table.cognitiveLevel} IS NULL OR ${table.cognitiveLevel} IN (1,2)`,
+    ),
     uniqueIndex("idx_cert_items_source")
       .on(table.teacherId, table.sourceRef)
       .where(sql`${table.sourceRef} IS NOT NULL`),
