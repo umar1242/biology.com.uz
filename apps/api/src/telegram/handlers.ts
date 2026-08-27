@@ -5,6 +5,7 @@ import {
   botPendingActions,
   certExamAnswers,
   certExamAttempts,
+  certExamItems,
   certExams,
   courseAccess,
   courseTelegramGroups,
@@ -350,11 +351,21 @@ async function finalizeCertTaskPhotos(
     return;
   }
 
+  // Stamp the bank question this position maps to, so an open task's
+  // history accumulates the same way a closed one's does.
+  const [bound] = await db
+    .select({ itemId: certExamItems.itemId })
+    .from(certExamItems)
+    .where(
+      and(eq(certExamItems.examId, attempt.examId), eq(certExamItems.taskNumber, taskNumber)),
+    )
+    .limit(1);
+
   // Re-sending replaces that task's photos rather than appending: the
   // student's intent when they send again is "use these instead".
   await db
     .insert(certExamAnswers)
-    .values({ attemptId, taskNumber, photoFileIds: fileIds })
+    .values({ attemptId, taskNumber, itemId: bound?.itemId ?? null, photoFileIds: fileIds })
     .onConflictDoUpdate({
       target: [certExamAnswers.attemptId, certExamAnswers.taskNumber],
       set: { photoFileIds: fileIds, updatedAt: new Date() },

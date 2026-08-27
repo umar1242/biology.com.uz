@@ -3,10 +3,11 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import {
-  certExamAnswerKeys,
   certExamAnswers,
   certExamAttempts,
+  certExamItems,
   certExams,
+  certItems,
   students,
 } from "../db/schema.js";
 import { requireAuth, requireTeacher } from "../plugins/auth.js";
@@ -22,6 +23,7 @@ import {
   isClosedTask,
   maxPointsFor,
   optionsFor,
+  topicFor,
 } from "../lib/certExam.js";
 
 const createSchema = z.object({
@@ -45,9 +47,19 @@ const answerKeySchema = z.object({
       z.object({
         task_number: z.number().int().min(1).max(35),
         correct_option: z.string().min(1).max(1),
+        // Optional citation ("Spectrum 2026, вариант 1, №5"). Two variants
+        // citing the same source resolve to one bank item, so statistics
+        // add up instead of splitting across duplicates.
+        source_ref: z.string().min(1).max(200).optional(),
       }),
     )
     .min(1),
+});
+
+const updateItemSchema = z.object({
+  correct_option: z.string().min(1).max(1).optional(),
+  source_ref: z.string().min(1).max(200).nullable().optional(),
+  topic: z.string().min(1).max(40).optional(),
 });
 
 const reviewSchema = z.object({
@@ -73,9 +85,22 @@ async function loadAccessibleExam(auth: ReturnType<typeof requireAuth>, examId: 
 async function keyCountFor(examId: number): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
-    .from(certExamAnswerKeys)
-    .where(eq(certExamAnswerKeys.examId, examId));
+    .from(certExamItems)
+    .innerJoin(certItems, eq(certItems.id, certExamItems.itemId))
+    .where(and(eq(certExamItems.examId, examId), sql`${certItems.correctOption} IS NOT NULL`));
   return row?.n ?? 0;
+}
+
+/** The exam's key, resolved through the item bank. */
+async function keyMapFor(examId: number): Promise<Map<number, string>> {
+  const rows = await db
+    .select({ taskNumber: certExamItems.taskNumber, option: certItems.correctOption })
+    .from(certExamItems)
+    .innerJoin(certItems, eq(certItems.id, certExamItems.itemId))
+    .where(eq(certExamItems.examId, examId));
+  return new Map(
+    rows.filter((r) => r.option !== null).map((r) => [r.taskNumber, r.option as string]),
+  );
 }
 
 /** Shape returned for a single exam, including how ready it is to publish. */
@@ -110,6 +135,155 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       max_points: maxPointsFor(n),
     })),
   }));
+
+
+  // --- item bank -------------------------------------------------------
+
+  /**
+   * The teacher's question bank with accumulated response statistics.
+   *
+   * Everything here is computed live: at 100–150 students the numbers are a
+   * single grouped scan, and a cached table would only add a way for the
+   * figures to go stale.
+   */
+  app.get("/cert-items", async (request) => {
+    const auth = requireAuth(request);
+    const query = request.query as { topic?: string; task_number?: string };
+
+    const conditions = [eq(certItems.teacherId, auth.teacherId)];
+    if (query.topic) conditions.push(eq(certItems.topic, query.topic));
+    if (query.task_number && /^\d+$/.test(query.task_number)) {
+      conditions.push(eq(certItems.taskNumber, Number(query.task_number)));
+    }
+
+    const rows = await db
+      .select({
+        id: certItems.id,
+        taskNumber: certItems.taskNumber,
+        correctOption: certItems.correctOption,
+        topic: certItems.topic,
+        sourceRef: certItems.sourceRef,
+        // Only graded answers count: an attempt still in progress has
+        // is_correct NULL and must not drag the difficulty down.
+        responses: sql<number>`count(${certExamAnswers.isCorrect})::int`,
+        correct: sql<number>`count(*) FILTER (WHERE ${certExamAnswers.isCorrect})::int`,
+        // For open tasks there is no key, so "difficulty" is the average
+        // share of the maximum the teacher actually awarded.
+        pointsAwarded: sql<number>`coalesce(sum(${certExamAnswers.awardedPoints}), 0)::int`,
+        pointsGraded: sql<number>`count(${certExamAnswers.awardedPoints})::int`,
+        usedInVariants: sql<number>`(
+          SELECT count(*)::int FROM cert_exam_items ei WHERE ei.item_id = ${certItems.id}
+        )`,
+      })
+      .from(certItems)
+      .leftJoin(certExamAnswers, eq(certExamAnswers.itemId, certItems.id))
+      .where(and(...conditions))
+      .groupBy(certItems.id)
+      .orderBy(certItems.taskNumber, certItems.id);
+
+    // Which wrong option students actually gravitate to. A key typo shows up
+    // as "most of them chose X, but the key says Y" — worth surfacing,
+    // because a mistyped letter in a 35-character key silently marks every
+    // student wrong and nothing else in the system would notice.
+    const distribution = await db
+      .select({
+        itemId: certExamAnswers.itemId,
+        option: certExamAnswers.chosenOption,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(certExamAnswers)
+      .innerJoin(certItems, eq(certItems.id, certExamAnswers.itemId))
+      .where(
+        and(
+          eq(certItems.teacherId, auth.teacherId),
+          sql`${certExamAnswers.chosenOption} IS NOT NULL`,
+          sql`${certExamAnswers.isCorrect} IS NOT NULL`,
+        ),
+      )
+      .groupBy(certExamAnswers.itemId, certExamAnswers.chosenOption);
+
+    const topChoice = new Map<number, { option: string; n: number }>();
+    for (const d of distribution) {
+      if (d.itemId === null || d.option === null) continue;
+      const prev = topChoice.get(d.itemId);
+      if (!prev || d.n > prev.n) topChoice.set(d.itemId, { option: d.option, n: d.n });
+    }
+
+    return rows.map((r) => {
+      const closed = isClosedTask(r.taskNumber);
+      const pValue = r.responses > 0 ? r.correct / r.responses : null;
+      const top = topChoice.get(r.id);
+      const maxPoints = maxPointsFor(r.taskNumber);
+      const avgShare =
+        !closed && r.pointsGraded > 0 ? r.pointsAwarded / (r.pointsGraded * maxPoints) : null;
+
+      return {
+        id: r.id,
+        task_number: r.taskNumber,
+        topic: r.topic,
+        source_ref: r.sourceRef,
+        correct_option: r.correctOption,
+        is_closed: closed,
+        max_points: maxPoints,
+        used_in_variants: r.usedInVariants,
+        responses: closed ? r.responses : r.pointsGraded,
+        // Share correct (closed) or share of maximum awarded (open). null
+        // until anyone has actually been graded on it.
+        p_value: closed ? pValue : avgShare,
+        most_chosen: top?.option ?? null,
+        // Deliberately conservative: a handful of responses is noise, and a
+        // flag a teacher learns to ignore is worse than no flag.
+        suspect_key:
+          closed &&
+          r.responses >= 8 &&
+          top !== undefined &&
+          top.option !== r.correctOption &&
+          top.n / r.responses >= 0.5,
+      };
+    });
+  });
+
+  app.patch("/cert-items/:id", async (request) => {
+    const auth = requireTeacher(request);
+    const itemId = Number((request.params as { id: string }).id);
+
+    const [item] = await db.select().from(certItems).where(eq(certItems.id, itemId)).limit(1);
+    if (!item || item.teacherId !== auth.teacherId) throw NotFound("Item not found");
+
+    const body = updateItemSchema.safeParse(request.body);
+    if (!body.success) throw Unprocessable(body.error.message);
+
+    if (body.data.correct_option !== undefined) {
+      if (!isClosedTask(item.taskNumber)) {
+        throw Unprocessable("Open tasks have no answer key");
+      }
+      const allowed = optionsFor(item.taskNumber);
+      if (!allowed.includes(body.data.correct_option.toUpperCase())) {
+        throw Unprocessable(`Task ${item.taskNumber} accepts ${allowed.join("/")}`);
+      }
+    }
+
+    const [updated] = await db
+      .update(certItems)
+      .set({
+        ...(body.data.correct_option !== undefined
+          ? { correctOption: body.data.correct_option.toUpperCase() }
+          : {}),
+        ...(body.data.source_ref !== undefined ? { sourceRef: body.data.source_ref } : {}),
+        ...(body.data.topic !== undefined ? { topic: body.data.topic } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(certItems.id, itemId))
+      .returning();
+
+    return {
+      id: updated.id,
+      task_number: updated.taskNumber,
+      correct_option: updated.correctOption,
+      source_ref: updated.sourceRef,
+      topic: updated.topic,
+    };
+  });
 
   app.get("/courses/:courseId/cert-exams", async (request) => {
     const auth = requireAuth(request);
@@ -183,7 +357,9 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       .limit(1);
     if (attempt) throw Conflict("Students have already started this variant");
 
-    await db.delete(certExamAnswerKeys).where(eq(certExamAnswerKeys.examId, exam.id));
+    // Items themselves stay in the bank — they may be used by other
+    // variants, and their history is the point of having a bank at all.
+    await db.delete(certExamItems).where(eq(certExamItems.examId, exam.id));
     await db.delete(certExams).where(eq(certExams.id, exam.id));
     reply.code(204).send();
   });
@@ -194,11 +370,24 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
     const auth = requireAuth(request);
     const exam = await loadAccessibleExam(auth, Number((request.params as { id: string }).id));
     const rows = await db
-      .select()
-      .from(certExamAnswerKeys)
-      .where(eq(certExamAnswerKeys.examId, exam.id))
-      .orderBy(certExamAnswerKeys.taskNumber);
-    return rows.map((r) => ({ task_number: r.taskNumber, correct_option: r.correctOption }));
+      .select({
+        taskNumber: certExamItems.taskNumber,
+        option: certItems.correctOption,
+        sourceRef: certItems.sourceRef,
+        topic: certItems.topic,
+      })
+      .from(certExamItems)
+      .innerJoin(certItems, eq(certItems.id, certExamItems.itemId))
+      .where(eq(certExamItems.examId, exam.id))
+      .orderBy(certExamItems.taskNumber);
+    return rows
+      .filter((r) => r.option !== null)
+      .map((r) => ({
+        task_number: r.taskNumber,
+        correct_option: r.option,
+        source_ref: r.sourceRef,
+        topic: r.topic,
+      }));
   });
 
   app.put("/cert-exams/:id/answer-key", async (request) => {
@@ -225,21 +414,103 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
     }
 
     await db.transaction(async (tx) => {
-      await tx
-        .delete(certExamAnswerKeys)
-        .where(
-          and(
-            eq(certExamAnswerKeys.examId, exam.id),
-            inArray(certExamAnswerKeys.taskNumber, [...seen]),
-          ),
-        );
-      await tx.insert(certExamAnswerKeys).values(
-        body.data.answers.map((a) => ({
-          examId: exam.id,
-          taskNumber: a.task_number,
-          correctOption: a.correct_option.toUpperCase(),
-        })),
-      );
+      for (const a of body.data.answers) {
+        const option = a.correct_option.toUpperCase();
+        let itemId: number | null = null;
+
+        // A cited source is the question's identity: reuse the existing bank
+        // item so its response history keeps growing, and correct its key if
+        // the teacher fixed a typo.
+        if (a.source_ref) {
+          const [existing] = await tx
+            .select()
+            .from(certItems)
+            .where(
+              and(eq(certItems.teacherId, auth.teacherId), eq(certItems.sourceRef, a.source_ref)),
+            )
+            .limit(1);
+          if (existing) {
+            itemId = existing.id;
+            if (existing.correctOption !== option) {
+              await tx
+                .update(certItems)
+                .set({ correctOption: option, updatedAt: new Date() })
+                .where(eq(certItems.id, existing.id));
+            }
+          }
+        }
+
+        // Otherwise reuse the item already bound to this slot of this exam,
+        // so re-saving the key edits the question instead of orphaning it.
+        if (itemId === null) {
+          const [bound] = await tx
+            .select({ itemId: certExamItems.itemId })
+            .from(certExamItems)
+            .where(
+              and(
+                eq(certExamItems.examId, exam.id),
+                eq(certExamItems.taskNumber, a.task_number),
+              ),
+            )
+            .limit(1);
+          if (bound) {
+            itemId = bound.itemId;
+            await tx
+              .update(certItems)
+              .set({
+                correctOption: option,
+                ...(a.source_ref ? { sourceRef: a.source_ref } : {}),
+                updatedAt: new Date(),
+              })
+              .where(eq(certItems.id, bound.itemId));
+          }
+        }
+
+        if (itemId === null) {
+          const [created] = await tx
+            .insert(certItems)
+            .values({
+              teacherId: auth.teacherId,
+              taskNumber: a.task_number,
+              correctOption: option,
+              topic: topicFor(a.task_number),
+              sourceRef: a.source_ref ?? null,
+            })
+            .returning();
+          itemId = created.id;
+        }
+
+        await tx
+          .insert(certExamItems)
+          .values({ examId: exam.id, taskNumber: a.task_number, itemId })
+          .onConflictDoUpdate({
+            target: [certExamItems.examId, certExamItems.taskNumber],
+            set: { itemId },
+          });
+      }
+
+      // Open tasks have no key but still need bank items, otherwise their
+      // photo answers would have nothing to accumulate statistics against.
+      for (const n of PHOTO_TASK_NUMBERS) {
+        const [bound] = await tx
+          .select({ itemId: certExamItems.itemId })
+          .from(certExamItems)
+          .where(and(eq(certExamItems.examId, exam.id), eq(certExamItems.taskNumber, n)))
+          .limit(1);
+        if (bound) continue;
+        const [created] = await tx
+          .insert(certItems)
+          .values({
+            teacherId: auth.teacherId,
+            taskNumber: n,
+            correctOption: null,
+            topic: topicFor(n),
+          })
+          .returning();
+        await tx
+          .insert(certExamItems)
+          .values({ examId: exam.id, taskNumber: n, itemId: created.id });
+      }
     });
 
     return describeExam(exam);
@@ -400,11 +671,7 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       .from(certExamAnswers)
       .where(eq(certExamAnswers.attemptId, attemptId))
       .orderBy(certExamAnswers.taskNumber);
-    const key = await db
-      .select()
-      .from(certExamAnswerKeys)
-      .where(eq(certExamAnswerKeys.examId, exam.id));
-    const keyByTask = new Map(key.map((k) => [k.taskNumber, k.correctOption]));
+    const keyByTask = await keyMapFor(exam.id);
     const answerByTask = new Map(answers.map((a) => [a.taskNumber, a]));
 
     return {

@@ -28,6 +28,7 @@ const STRINGS = {
   navCourses: { ru: "Курсы", uz: "Kurslar" },
   navReview: { ru: "Проверка ДЗ", uz: "Vazifalarni tekshirish" },
   navCert: { ru: "Сертификат", uz: "Sertifikat" },
+  navBank: { ru: "Банк заданий", uz: "Topshiriqlar banki" },
   navStudents: { ru: "Ученики", uz: "O'quvchilar" },
   navAssistants: { ru: "Помощники", uz: "Yordamchilar" },
   navSettings: { ru: "Настройки", uz: "Sozlamalar" },
@@ -87,6 +88,50 @@ const STRINGS = {
   certReviewQueue: { ru: "Ждут проверки", uz: "Tekshiruvni kutmoqda" },
   certLate: { ru: "Просрочено", uz: "Kechikkan" },
   certDeleteVariant: { ru: "Удалить вариант", uz: "Variantni o'chirish" },
+  // --- item bank ---
+  bankTitle: { ru: "Банк заданий", uz: "Topshiriqlar banki" },
+  bankSubtitle: {
+    ru: "Статистика по каждому заданию копится между вариантами и потоками",
+    uz: "Har bir topshiriq statistikasi variantlar va oqimlar bo'ylab to'planadi",
+  },
+  bankEmpty: {
+    ru: "Банк пуст. Задания появятся, когда вы заполните ключ варианта.",
+    uz: "Bank bo'sh. Variant kalitini to'ldirganingizda topshiriqlar paydo bo'ladi.",
+  },
+  bankTask: { ru: "Задание", uz: "Topshiriq" },
+  bankTopic: { ru: "Тема", uz: "Mavzu" },
+  bankKey: { ru: "Ключ", uz: "Kalit" },
+  bankResponses: { ru: "Ответов", uz: "Javoblar" },
+  bankDifficulty: { ru: "Верных", uz: "To'g'ri" },
+  bankUsedIn: { ru: "В вариантах", uz: "Variantlarda" },
+  bankSource: { ru: "Источник", uz: "Manba" },
+  bankSourceHint: {
+    ru: "Например: Spectrum 2026, вариант 1, №5. Одинаковый источник = одно задание.",
+    uz: "Masalan: Spectrum 2026, 1-variant, №5. Bir xil manba = bitta topshiriq.",
+  },
+  bankNoData: { ru: "нет данных", uz: "ma'lumot yo'q" },
+  bankSuspectKey: { ru: "Проверьте ключ", uz: "Kalitni tekshiring" },
+  bankSuspectHint: {
+    ru: "Большинство выбрало «{opt}», а в ключе «{key}». Похоже на опечатку.",
+    uz: "Ko'pchilik «{opt}» ni tanladi, kalitda esa «{key}». Xatoga o'xshaydi.",
+  },
+  bankTooEasy: { ru: "Слишком лёгкое", uz: "Juda oson" },
+  bankTooHard: { ru: "Слишком трудное", uz: "Juda qiyin" },
+  bankFilterAll: { ru: "Все", uz: "Barchasi" },
+  bankFilterProblem: { ru: "Проблемные", uz: "Muammoli" },
+  bankSaved: { ru: "Сохранено", uz: "Saqlandi" },
+
+  // --- topics from the spec ---
+  topicLifeScience: { ru: "Биология как наука", uz: "Biologiya fan sifatida" },
+  topicCell: { ru: "Клетка, обмен веществ, генетика", uz: "Hujayra, moddalar almashinuvi, genetika" },
+  topicSystematics: { ru: "Систематика", uz: "Sistematika" },
+  topicPlantsAnimals: { ru: "Растения и животные", uz: "O'simlik va hayvonot dunyosi" },
+  topicHuman: { ru: "Организм человека", uz: "Odam organizmi" },
+  topicSpeciesPopulation: { ru: "Вид и популяция", uz: "Tur va populyatsiya" },
+  topicEcosystem: { ru: "Экосистема и биосфера", uz: "Ekosistema va biosfera" },
+  topicLogic: { ru: "Логические задания", uz: "Mantiqiy topshiriqlar" },
+  topicGeneralBio: { ru: "Общебиологические задачи", uz: "Umumbiologik masalalar" },
+
 
   navSupport: { ru: "Поддержка", uz: "Yordam" },
   navLogout: { ru: "Выйти", uz: "Chiqish" },

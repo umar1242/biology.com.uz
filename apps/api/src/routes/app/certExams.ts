@@ -3,8 +3,9 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../../db/client.js";
 import {
-  certExamAnswerKeys,
   certExamAnswers,
+  certExamItems,
+  certItems,
   certExamAttempts,
   certExams,
   courseAccess,
@@ -312,6 +313,17 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    // Which bank question sits at each position of this variant — stamped
+    // onto the answer so statistics group by question, not by position.
+    const itemByTask = new Map(
+      (
+        await db
+          .select({ taskNumber: certExamItems.taskNumber, itemId: certExamItems.itemId })
+          .from(certExamItems)
+          .where(eq(certExamItems.examId, attempt.examId))
+      ).map((r) => [r.taskNumber, r.itemId]),
+    );
+
     await db.transaction(async (tx) => {
       for (const a of body.data.answers) {
         await tx
@@ -319,6 +331,7 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
           .values({
             attemptId: attempt.id,
             taskNumber: a.task_number,
+            itemId: itemByTask.get(a.task_number) ?? null,
             chosenOption: a.chosen_option === null ? null : a.chosen_option.toUpperCase(),
           })
           .onConflictDoUpdate({
@@ -365,11 +378,14 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(certExams.id, attempt.examId))
       .limit(1);
 
-    const key = await db
-      .select()
-      .from(certExamAnswerKeys)
-      .where(eq(certExamAnswerKeys.examId, exam.id));
-    const keyByTask = new Map(key.map((k) => [k.taskNumber, k.correctOption]));
+    const keyRows = await db
+      .select({ taskNumber: certExamItems.taskNumber, option: certItems.correctOption })
+      .from(certExamItems)
+      .innerJoin(certItems, eq(certItems.id, certExamItems.itemId))
+      .where(eq(certExamItems.examId, exam.id));
+    const keyByTask = new Map(
+      keyRows.filter((r) => r.option !== null).map((r) => [r.taskNumber, r.option as string]),
+    );
 
     const answers = await db
       .select()

@@ -35,7 +35,10 @@ cleanup() {
   PSQL "DELETE FROM bot_pending_actions WHERE target_cert_attempt_id IN (SELECT id FROM cert_exam_attempts WHERE student_id IN (SELECT id FROM students WHERE telegram_id=$TG)) OR target_cert_exam_id=${EXAM:-0};" >/dev/null
   PSQL "DELETE FROM cert_exam_answers WHERE attempt_id IN (SELECT id FROM cert_exam_attempts WHERE student_id IN (SELECT id FROM students WHERE telegram_id=$TG));" >/dev/null
   PSQL "DELETE FROM cert_exam_attempts WHERE student_id IN (SELECT id FROM students WHERE telegram_id=$TG);" >/dev/null
-  [ -n "$EXAM" ] && PSQL "DELETE FROM cert_exam_answer_keys WHERE exam_id=$EXAM; DELETE FROM cert_exams WHERE id=$EXAM;" >/dev/null
+  if [ -n "$EXAM" ]; then
+    PSQL "DELETE FROM cert_exam_items WHERE exam_id=$EXAM; DELETE FROM cert_exams WHERE id=$EXAM;" >/dev/null
+    PSQL "DELETE FROM cert_items WHERE id NOT IN (SELECT item_id FROM cert_exam_items) AND id NOT IN (SELECT item_id FROM cert_exam_answers WHERE item_id IS NOT NULL);" >/dev/null
+  fi
   PSQL "DELETE FROM course_access WHERE student_id IN (SELECT id FROM students WHERE telegram_id=$TG); DELETE FROM students WHERE telegram_id=$TG;" >/dev/null
 }
 trap cleanup EXIT
@@ -230,6 +233,55 @@ PSQL "DELETE FROM students WHERE telegram_id=$OTG;" >/dev/null
 
 req DELETE "/cert-exams/$EXAM" "" "$TT"
 chk "delete with attempts -> 409" 409 "$RS" "$RB"
+
+
+echo "== ITEM BANK =="
+req GET /cert-items "" "$TT"
+chk "bank readable" 200 "$RS" "$RB"
+BANKN=$(echo "$RB" | jq -r "[.[]|select(.used_in_variants>0)]|length")
+chk "43 items bound to variants" "true" "$([ "$BANKN" -ge 43 ] && echo true || echo false)" "в банке $BANKN"
+chk "task 1 topic from spec" "life_science" "$(echo "$RB" | jq -r '[.[]|select(.task_number==1)][0].topic')" "$RB"
+chk "task 5 topic cell" "cell" "$(echo "$RB" | jq -r '[.[]|select(.task_number==5)][0].topic')" "$RB"
+chk "task 33 topic logic" "logic" "$(echo "$RB" | jq -r '[.[]|select(.task_number==33)][0].topic')" "$RB"
+chk "task 41 topic general" "general_bio" "$(echo "$RB" | jq -r '[.[]|select(.task_number==41)][0].topic')" "$RB"
+chk "task 41 max 30 in bank" "30" "$(echo "$RB" | jq -r '[.[]|select(.task_number==41)][0].max_points')" "$RB"
+chk "open task has no key" "null" "$(echo "$RB" | jq -r '[.[]|select(.task_number==38)][0].correct_option')" "$RB"
+
+ITEM1=$(echo "$RB" | jq -r "[.[]|select(.task_number==1 and .used_in_variants>0)][0].id")
+req PATCH "/cert-items/$ITEM1" '{"source_ref":"Spectrum 2026, вариант 1, №1"}' "$TT"
+chk "set source ref" 200 "$RS" "$RB"
+req PATCH "/cert-items/$ITEM1" '{"correct_option":"E"}' "$TT"
+chk "invalid letter for task 1 -> 422" 422 "$RS" "$RB"
+req PATCH "/cert-items/$ITEM1" '{"correct_option":"B"}' "$TT"
+chk "fix key on item" 200 "$RS" "$RB"
+req PATCH "/cert-items/$ITEM1" '{"correct_option":"A"}' "$TT"
+chk "restore key" 200 "$RS" "$RB"
+
+ITEM38=$(echo "$(curl -s -H "Authorization: Bearer $TT" "$API/cert-items")" | jq -r '[.[]|select(.task_number==38 and .used_in_variants>0)][0].id')
+req PATCH "/cert-items/$ITEM38" '{"correct_option":"A"}' "$TT"
+chk "key on open task -> 422" 422 "$RS" "$RB"
+
+req GET /cert-items "" "$BT"
+chk "other tenant sees own bank only" "0" "$(echo "$RB" | jq -r "[.[]|select(.id==$ITEM1)]|length")" "$RB"
+req PATCH "/cert-items/$ITEM1" '{"source_ref":"взлом"}' "$BT"
+chk "other tenant cannot edit item -> 404" 404 "$RS" "$RB"
+
+echo "== SOURCE REF DEDUP =="
+FUT2=$(date -u -d '+8 days' +%Y-%m-%dT%H:%M:%SZ)
+req POST "/courses/$CID/cert-exams" "{\"title\":\"Вариант B $RUNID\",\"deadline_at\":\"$FUT2\"}" "$TT"
+EXAM2=$(echo "$RB" | jq -r .id)
+req PUT "/cert-exams/$EXAM2/answer-key" '{"answers":[{"task_number":1,"correct_option":"A","source_ref":"Spectrum 2026, вариант 1, №1"}]}' "$TT"
+chk "reuse item by source ref" 200 "$RS" "$RB"
+SAME=$(PSQL "SELECT item_id FROM cert_exam_items WHERE exam_id=$EXAM2 AND task_number=1;" | tr -d ' ')
+chk "same bank item in both variants" "$ITEM1" "$SAME" "item=$SAME"
+req GET /cert-items "" "$TT"
+chk "item now used in 2 variants" "2" "$(echo "$RB" | jq -r "[.[]|select(.id==$ITEM1)][0].used_in_variants")" "$RB"
+PSQL "DELETE FROM cert_exam_items WHERE exam_id=$EXAM2; DELETE FROM cert_exams WHERE id=$EXAM2;" >/dev/null
+
+echo "== STATISTICS =="
+req GET /cert-items "" "$TT"
+chk "task 1 has a response" "1" "$(echo "$RB" | jq -r '[.[]|select(.id=='"$ITEM1"')][0].responses')" "$RB"
+chk "task 1 p_value = 1 (answered right)" "1" "$(echo "$RB" | jq -r '[.[]|select(.id=='"$ITEM1"')][0].p_value')" "$RB"
 
 echo
 echo "==== RESULT: $PASS passed, $FAIL failed ===="

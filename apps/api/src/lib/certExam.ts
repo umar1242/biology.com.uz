@@ -71,3 +71,33 @@ export const TOTAL_MAX_POINTS = ALL_TASK_NUMBERS.reduce((sum, n) => sum + maxPoi
 
 /** Max points reachable without the teacher's manual review (tasks 1–35). */
 export const AUTO_MAX_POINTS = KEY_TASK_NUMBERS.length;
+
+/**
+ * Topic per task number, straight from the specification's §IV table, which
+ * fixes which section each position tests (e.g. 2–11 are always cell
+ * biology, 33–35 always the logic block). That mapping is what lets the
+ * platform tag a question's topic without asking the teacher to do it.
+ * Codes, not labels — the two frontends render them in ru/uz.
+ */
+export type CertTopic =
+  | "life_science"
+  | "cell"
+  | "systematics"
+  | "plants_animals"
+  | "human"
+  | "species_population"
+  | "ecosystem"
+  | "logic"
+  | "general_bio";
+
+export function topicFor(n: number): CertTopic {
+  if (n === 1) return "life_science";
+  if (n <= 11) return "cell";
+  if (n === 12) return "systematics";
+  if (n <= 19) return "plants_animals";
+  if (n <= 23) return "human";
+  if (n <= 28) return "species_population";
+  if (n <= 32) return "ecosystem";
+  if (n <= 35) return "logic";
+  return "general_bio";
+}

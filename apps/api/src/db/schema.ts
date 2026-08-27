@@ -592,24 +592,62 @@ export const certExams = pgTable(
   ],
 );
 
-export const certExamAnswerKeys = pgTable(
-  "cert_exam_answer_keys",
+// The item bank. A question is its own row rather than "position N inside
+// variant M", so its response history survives the variant being edited or
+// deleted, accumulates across cohorts, and can be reused in a new variant.
+// That accumulation is also the precondition for ever calibrating item
+// difficulty (Rasch) — without it every response collected is unusable.
+export const certItems = pgTable(
+  "cert_items",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    teacherId: bigint("teacher_id", { mode: "number" })
+      .notNull()
+      .references(() => teachers.staffUserId),
+    // The slot a question belongs to. The spec fixes both the option set and
+    // the topic per position, so this is the question's own property, not
+    // just where it happened to land in one variant.
+    taskNumber: integer("task_number").notNull(),
+    correctOption: text("correct_option"),
+    topic: text("topic").notNull(),
+    // Optional "Spectrum 2026, вариант 1, №5". When two variants cite the
+    // same source the platform treats them as one question, which is what
+    // makes statistics add up instead of splitting.
+    sourceRef: text("source_ref"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_cert_items_teacher").on(table.teacherId, table.taskNumber),
+    uniqueIndex("idx_cert_items_source")
+      .on(table.teacherId, table.sourceRef)
+      .where(sql`${table.sourceRef} IS NOT NULL`),
+    check("cert_item_task_range", sql`${table.taskNumber} BETWEEN 1 AND 43`),
+    check(
+      "cert_item_option_valid",
+      sql`(${table.taskNumber} > 35 AND ${table.correctOption} IS NULL)
+        OR (${table.taskNumber} <= 32 AND ${table.correctOption} IN ('A','B','C','D'))
+        OR (${table.taskNumber} BETWEEN 33 AND 35 AND ${table.correctOption} IN ('A','B','C','D','E','F'))`,
+    ),
+  ],
+);
+
+/** Which question sits at which position of a variant. */
+export const certExamItems = pgTable(
+  "cert_exam_items",
   {
     examId: bigint("exam_id", { mode: "number" })
       .notNull()
       .references(() => certExams.id, { onDelete: "cascade" }),
     taskNumber: integer("task_number").notNull(),
-    correctOption: text("correct_option").notNull(),
+    itemId: bigint("item_id", { mode: "number" })
+      .notNull()
+      .references(() => certItems.id),
   },
   (table) => [
-    primaryKey({ name: "cert_exam_answer_keys_pk", columns: [table.examId, table.taskNumber] }),
-    check("cert_key_task_range", sql`${table.taskNumber} BETWEEN 1 AND 35`),
-    // 1–32 are A–D; 33–35 share a six-option pool A–F (spec §IV, Y2).
-    check(
-      "cert_key_option_valid",
-      sql`(${table.taskNumber} <= 32 AND ${table.correctOption} IN ('A','B','C','D'))
-        OR (${table.taskNumber} >= 33 AND ${table.correctOption} IN ('A','B','C','D','E','F'))`,
-    ),
+    primaryKey({ name: "cert_exam_items_pk", columns: [table.examId, table.taskNumber] }),
+    index("idx_cert_exam_items_item").on(table.itemId),
+    check("cert_exam_item_task_range", sql`${table.taskNumber} BETWEEN 1 AND 43`),
   ],
 );
 
@@ -666,6 +704,10 @@ export const certExamAnswers = pgTable(
       .notNull()
       .references(() => certExamAttempts.id, { onDelete: "cascade" }),
     taskNumber: integer("task_number").notNull(),
+    // Denormalized from cert_exam_items: statistics group by question, and
+    // resolving it through the exam on every read would make the item-bank
+    // queries a three-table join for no benefit.
+    itemId: bigint("item_id", { mode: "number" }).references(() => certItems.id),
     // Closed tasks (1–35): the picked letter, and the verdict frozen at
     // submit time so a later key correction can't silently rewrite history.
     chosenOption: text("chosen_option"),
@@ -686,6 +728,7 @@ export const certExamAnswers = pgTable(
       "cert_answer_open_shape",
       sql`${table.taskNumber} <= 35 OR (${table.chosenOption} IS NULL AND ${table.isCorrect} IS NULL)`,
     ),
+    index("idx_cert_answers_item").on(table.itemId),
     check(
       "cert_answer_points_nonnegative",
       sql`${table.awardedPoints} IS NULL OR ${table.awardedPoints} >= 0`,

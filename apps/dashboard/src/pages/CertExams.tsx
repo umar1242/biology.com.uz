@@ -22,7 +22,7 @@ type CertExam = {
   total_max_points: number;
 };
 
-type KeyEntry = { task_number: number; correct_option: string };
+type KeyEntry = { task_number: number; correct_option: string; source_ref: string | null };
 
 const OPTIONS_AD = ["A", "B", "C", "D"];
 const OPTIONS_AF = ["A", "B", "C", "D", "E", "F"];
@@ -40,6 +40,11 @@ function AnswerKeyEditor({ exam }: { exam: CertExam }) {
   const { t } = useI18n();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Record<number, string>>({});
+  // Optional per-task citation. Filling it in makes the same question in a
+  // future variant resolve to the same bank item, so its statistics keep
+  // accumulating instead of starting over.
+  const [sources, setSources] = useState<Record<number, string>>({});
+  const [showSources, setShowSources] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +56,9 @@ function AnswerKeyEditor({ exam }: { exam: CertExam }) {
   useEffect(() => {
     if (!key.data) return;
     setDraft(Object.fromEntries(key.data.map((k) => [k.task_number, k.correct_option])));
+    setSources(
+      Object.fromEntries(key.data.filter((k) => k.source_ref).map((k) => [k.task_number, k.source_ref!])),
+    );
   }, [key.data]);
 
   const save = useMutation({
@@ -60,7 +68,11 @@ function AnswerKeyEditor({ exam }: { exam: CertExam }) {
         body: JSON.stringify({
           answers: Object.entries(draft)
             .filter(([, v]) => v)
-            .map(([n, v]) => ({ task_number: Number(n), correct_option: v })),
+            .map(([n, v]) => ({
+              task_number: Number(n),
+              correct_option: v,
+              ...(sources[Number(n)]?.trim() ? { source_ref: sources[Number(n)].trim() } : {}),
+            })),
         }),
       }),
     onSuccess: () => {
@@ -77,7 +89,14 @@ function AnswerKeyEditor({ exam }: { exam: CertExam }) {
   return (
     <div className="mt-4 rounded-2xl border border-line bg-inset p-4">
       <p className="text-sm font-semibold text-ink">{t("certKeyTitle")}</p>
-      <p className="mt-1 mb-3 text-xs text-muted">{t("certKeyHint")}</p>
+      <p className="mt-1 mb-2 text-xs text-muted">{t("certKeyHint")}</p>
+      <button
+        type="button"
+        onClick={() => setShowSources((v) => !v)}
+        className="mb-3 text-xs font-medium text-brand"
+      >
+        {showSources ? "−" : "+"} {t("bankSource")}
+      </button>
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-2">
         {Array.from({ length: 35 }, (_, i) => i + 1).map((n) => (
@@ -103,6 +122,24 @@ function AnswerKeyEditor({ exam }: { exam: CertExam }) {
           </label>
         ))}
       </div>
+
+      {showSources && (
+        <div className="mt-3">
+          <p className="mb-2 text-xs text-muted">{t("bankSourceHint")}</p>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
+            {Array.from({ length: 35 }, (_, i) => i + 1).map((n) => (
+              <label key={n} className="flex items-center gap-2 rounded-xl border border-line bg-card px-2 py-1.5">
+                <span className="w-6 shrink-0 text-xs font-semibold text-muted">{n}</span>
+                <input
+                  value={sources[n] ?? ""}
+                  onChange={(e) => setSources((sv) => ({ ...sv, [n]: e.target.value }))}
+                  className="w-full bg-transparent text-xs text-ink outline-none"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
