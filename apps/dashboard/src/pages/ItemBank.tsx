@@ -79,18 +79,24 @@ function DifficultyMeter({ value, confident }: { value: number | null; confident
         )}
       </div>
 
-      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-inset">
-        {/* The useful band, a recessive zone under the fill. */}
-        <div
-          className="absolute inset-y-0 bg-line"
-          style={{ left: `${GOOD_LOW * 100}%`, right: `${(1 - GOOD_HIGH) * 100}%` }}
-        />
+      <div className="relative h-1.5 w-full rounded-full bg-inset">
         <div
           className={`absolute inset-y-0 left-0 rounded-full ${
             !confident ? "bg-muted/40" : outside ? "bg-warn" : "bg-brand"
           }`}
           style={{ width: `${Math.max(pct, 2)}%` }}
         />
+        {/* The band's edges as ticks rather than a filled zone: a fill at
+            this size was indistinguishable from the track (measured 233 vs
+            246 grey) and would compete with the value mark anyway. Ticks sit
+            above the fill so they stay readable wherever the value lands. */}
+        {[GOOD_LOW, GOOD_HIGH].map((edge) => (
+          <div
+            key={edge}
+            className="absolute -top-0.5 -bottom-0.5 w-px bg-muted/70"
+            style={{ left: `${edge * 100}%` }}
+          />
+        ))}
       </div>
     </div>
   );
@@ -315,17 +321,17 @@ export function ItemBankPage() {
                     : "border-line"
                 }`}
               >
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+                <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
                   <button
                     type="button"
                     onClick={() => navigate(`/bank/${item.id}`)}
                     title={t("cardTitle")}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-inset text-sm font-semibold tabular-nums text-muted hover:bg-brand hover:text-on-brand"
+                    className="mt-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-inset text-sm font-semibold tabular-nums text-muted hover:bg-brand hover:text-on-brand"
                   >
                     {item.task_number}
                   </button>
 
-                  <div className="min-w-0 flex-1 basis-48">
+                  <div className="mt-4 min-w-0 flex-1 basis-48">
                     <button
                       type="button"
                       onClick={() => navigate(`/bank/${item.id}`)}
@@ -336,40 +342,59 @@ export function ItemBankPage() {
                     <SourceEditor item={item} />
                   </div>
 
+                  {/* Every metric column shares one grid: a 16px caption line
+                      and a 32px value area. Centring columns of differing
+                      height instead left the captions 4–6px out of line. */}
                   {item.is_closed && (
-                    <div className="shrink-0 text-center">
-                      <p className="text-[11px] text-muted">{t("bankKey")}</p>
-                      <p className="text-sm font-semibold text-ink">{item.correct_option}</p>
+                    <div className="w-10 shrink-0 text-center">
+                      <p className="h-4 text-[11px] leading-4 text-muted">{t("bankKey")}</p>
+                      <div className="flex h-8 items-center justify-center">
+                        <span className="text-sm font-semibold text-ink">
+                          {item.correct_option}
+                        </span>
+                      </div>
                     </div>
                   )}
 
                   <div className="w-28 shrink-0">
-                    <p className="mb-0.5 text-[11px] text-muted">{t("diffTitle")}</p>
-                    <DifficultyMeter value={item.p_value} confident={confident} />
+                    <p className="h-4 text-[11px] leading-4 text-muted">{t("diffTitle")}</p>
+                    <div className="flex h-8 flex-col justify-center">
+                      <DifficultyMeter value={item.p_value} confident={confident} />
+                    </div>
                   </div>
 
-                  <div className="shrink-0">
-                    <p className="mb-1 text-[11px] text-muted">{t("discTitle")}</p>
-                    <DiscriminationChip item={item} />
+                  <div className="w-52 shrink-0">
+                    <p className="h-4 text-[11px] leading-4 text-muted">{t("discTitle")}</p>
+                    <div className="flex h-8 items-center">
+                      <DiscriminationChip item={item} />
+                    </div>
                   </div>
 
-                  <div className="shrink-0 text-right">
-                    <p className="text-[11px] text-muted">{t("bankResponses")}</p>
-                    <p
-                      className={`text-sm font-semibold tabular-nums ${
-                        confident ? "text-ink" : "text-muted"
-                      }`}
-                    >
-                      {item.responses}
-                    </p>
-                    {!confident && <p className="text-[10px] text-muted">{t("lowConfidence")}</p>}
+                  <div className="w-16 shrink-0 text-right">
+                    <p className="h-4 text-[11px] leading-4 text-muted">{t("bankResponses")}</p>
+                    <div className="flex h-8 flex-col justify-center">
+                      <span
+                        className={`text-sm font-semibold tabular-nums ${
+                          confident ? "text-ink" : "text-muted"
+                        }`}
+                      >
+                        {item.responses}
+                      </span>
+                      {!confident && (
+                        <span className="text-[10px] leading-3 text-muted">
+                          {t("lowConfidence")}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="shrink-0 text-right">
-                    <p className="text-[11px] text-muted">{t("bankUsedIn")}</p>
-                    <p className="text-sm font-semibold tabular-nums text-ink">
-                      {item.used_in_variants}
-                    </p>
+                  <div className="w-20 shrink-0 text-right">
+                    <p className="h-4 text-[11px] leading-4 text-muted">{t("bankUsedIn")}</p>
+                    <div className="flex h-8 items-center justify-end">
+                      <span className="text-sm font-semibold tabular-nums text-ink">
+                        {item.used_in_variants}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
