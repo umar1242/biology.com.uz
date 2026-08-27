@@ -1,0 +1,49 @@
+name: CI
+
+# Runs the hermetic checks on every push and PR. These need no database, no
+# Telegram, no secrets — so they're fast and never flaky, and a red run here
+# always means a real regression.
+#
+# NOTE: the HTTP e2e suites (test/e2e-*.sh) are intentionally NOT wired in yet.
+# They currently assume the local docker-compose stack — they read the bot
+# token out of apps/api/.env and shell into a container hardcoded as
+# `myproject-postgres-1` (see grep in test/*.sh). Running them in CI first
+# needs that harness parametrised (DB access + staff seeding). Tracked as a
+# follow-up; kept out so this workflow stays green and meaningful.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      # One install for the whole workspace (npm workspaces share a lockfile).
+      - run: npm ci
+
+      # API: type safety, the certExam math unit tests, and a real build.
+      - name: API typecheck
+        run: npm run typecheck --workspace=apps/api
+
+      - name: API unit tests
+        run: npm run test:unit --workspace=apps/api
+
+      - name: API build
+        run: npm run build --workspace=apps/api
+
+      # Frontends: their `build` script runs `tsc --noEmit && vite build`,
+      # so this covers both type errors and a broken bundle.
+      - name: Dashboard build
+        run: npm run build --workspace=apps/dashboard
+
+      - name: Mini App build
+        run: npm run build --workspace=apps/miniapp

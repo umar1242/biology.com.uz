@@ -9,6 +9,8 @@
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
+    "test:unit": "bash -euc 'shopt -s globstar; node --import tsx --test src/**/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "set-webhook": "tsx src/scripts/setWebhook.ts"
   },
   "dependencies": {
