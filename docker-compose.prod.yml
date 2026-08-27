@@ -4,12 +4,24 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      # Real password comes from the root .env (gitignored) — never hardcode
+      # it here, this file is committed to a public repo. Must match the
+      # password inside DATABASE_URL in apps/api/.env.production.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required — set it in the root .env}
       POSTGRES_DB: course_platform
     # Not published to the host — only the api service on the compose
     # network needs to reach it.
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Lets `api` wait for the DB to actually accept connections (see its
+    # depends_on: condition: service_healthy) rather than just for the
+    # container to start — otherwise a cold boot races the first query.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d course_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   telegram-bot-api:
     image: aiogram/telegram-bot-api:latest
@@ -29,8 +41,19 @@ services:
     env_file:
       - apps/api/.env.production
     depends_on:
-      - postgres
-      - telegram-bot-api
+      postgres:
+        condition: service_healthy
+      telegram-bot-api:
+        condition: service_started
+    healthcheck:
+      # Node 20 has global fetch — no extra tooling in the image. Hits the
+      # app's own /health, which runs a real SELECT 1 against Postgres.
+      test:
+        ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     volumes:
       # In TELEGRAM_LOCAL mode getFile returns an absolute path on the bot
       # API server's own filesystem — it does not serve files over HTTP. The

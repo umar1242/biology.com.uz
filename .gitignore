@@ -15,8 +15,15 @@ build/
 # Локальные бинарники (cloudflared ~38 МБ — ставится отдельно, см. DEPLOY.md)
 .tools/
 
+# Дампы БД (scripts/backup-db.sh). Содержат персональные данные учеников —
+# никогда не в репозиторий.
+backups/
+
 # Локальные настройки инструментов, специфичные для машины
 .claude/settings.local.json
 
 *.log
 .DS_Store
+
+# Кэш снапшотов playwright-cli (визуальная отладка)
+.playwright-cli/
