@@ -64,6 +64,13 @@
       "when": 1787823600000,
       "tag": "0008_cert_exams",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787830000000,
+      "tag": "0009_cert_variant_file_kind",
+      "breakpoints": true
     }
   ]
 }

@@ -279,7 +279,7 @@ async function routePhotos(ctx: Context, telegramId: number, fileIds: string[]) 
   }
   const certVariant = await findClaimedPending(telegramId, "attach_cert_variant");
   if (certVariant?.targetCertExamId) {
-    await finalizeCertVariant(ctx, telegramId, fileIds[0], null, certVariant);
+    await finalizeCertVariant(ctx, telegramId, fileIds[0], null, "photo", certVariant);
     return;
   }
   await finalizeHomeworkSubmission(ctx, telegramId, fileIds);
@@ -291,6 +291,7 @@ async function finalizeCertVariant(
   telegramId: number,
   fileId: string,
   fileName: string | null,
+  kind: "photo" | "document",
   pending: { id: number; targetCertExamId: number | null },
 ) {
   if (!pending.targetCertExamId) return;
@@ -298,7 +299,12 @@ async function finalizeCertVariant(
 
   await db
     .update(certExams)
-    .set({ variantFileId: fileId, variantFileName: fileName, updatedAt: new Date() })
+    .set({
+      variantFileId: fileId,
+      variantFileName: fileName,
+      variantFileKind: kind,
+      updatedAt: new Date(),
+    })
     .where(eq(certExams.id, pending.targetCertExamId));
   await db
     .update(botPendingActions)
@@ -374,6 +380,7 @@ bot.on("message:document", async (ctx) => {
     telegramId,
     ctx.message.document.file_id,
     ctx.message.document.file_name ?? null,
+    "document",
     pending,
   );
 });

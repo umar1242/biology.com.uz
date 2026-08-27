@@ -15,6 +15,8 @@ import { requireStudentAuth } from "../../plugins/studentAuth.js";
 import { loadStudentAccessibleCourse } from "../../lib/studentAccess.js";
 import { createPendingActionDeepLink } from "../../telegram/pendingActions.js";
 import { fetchTelegramFile } from "../../telegram/client.js";
+import { bot } from "../../telegram/bot.js";
+import { students } from "../../db/schema.js";
 import { Conflict, NotFound, Unprocessable } from "../../lib/errors.js";
 import {
   TOTAL_MAX_POINTS,
@@ -156,6 +158,51 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
 
     const file = await fetchTelegramFile(exam.variantFileId);
     reply.header("Content-Type", file.contentType).send(file.buffer);
+  });
+
+
+  /**
+   * Sends the variant to the student's own Telegram chat.
+   *
+   * This exists because downloading it in-page does not work inside
+   * Telegram: the raw endpoint needs a Bearer token, so it has to be
+   * fetched as a blob, and Telegram's WebView refuses to open blob: URLs
+   * via window.open — the button simply did nothing on a phone. Pushing the
+   * file through the bot is the native path, costs no re-upload (Telegram
+   * already holds the file behind its file_id) and leaves the student with
+   * the variant in a chat they can reopen later.
+   */
+  app.post("/app/cert-exams/:id/variant-file/send", async (request) => {
+    const auth = requireStudentAuth(request);
+    const examId = Number((request.params as { id: string }).id);
+
+    const [exam] = await db.select().from(certExams).where(eq(certExams.id, examId)).limit(1);
+    if (!exam || exam.publishedAt === null) throw NotFound("Exam not found");
+    await loadStudentAccessibleCourse(auth.studentId, exam.courseId);
+    if (!exam.variantFileId) throw NotFound("No variant file attached");
+
+    const [student] = await db
+      .select()
+      .from(students)
+      .where(eq(students.id, auth.studentId))
+      .limit(1);
+    if (!student) throw NotFound("Student not found");
+
+    const caption = exam.title;
+    try {
+      // Older variants predate the kind column; a photo id is the safe
+      // default there because that was the only path the bot had then.
+      if (exam.variantFileKind === "document") {
+        await bot.api.sendDocument(Number(student.telegramId), exam.variantFileId, { caption });
+      } else {
+        await bot.api.sendPhoto(Number(student.telegramId), exam.variantFileId, { caption });
+      }
+    } catch (err) {
+      request.log.error({ err, examId }, "Failed to send variant file to student");
+      throw Conflict("Could not send the file. Open the bot chat and press Start, then retry.");
+    }
+
+    return { sent: true };
   });
 
   app.post("/app/cert-exams/:id/start", async (request, reply) => {

@@ -35,7 +35,12 @@ const STRINGS = {
   certNone: { ru: "Пока нет доступных вариантов.", uz: "Hozircha mavjud variantlar yo'q." },
   certDeadline: { ru: "До", uz: "Muddat" },
   certOpenVariant: { ru: "Открыть вариант", uz: "Variantni ochish" },
-  certDownloadFile: { ru: "Скачать файл варианта", uz: "Variant faylini yuklab olish" },
+  certSendFile: { ru: "Прислать файл варианта в чат", uz: "Variant faylini chatga yuborish" },
+  certFileSent: {
+    ru: "Файл отправлен в чат с ботом ✅",
+    uz: "Fayl bot bilan chatga yuborildi ✅",
+  },
+  certOpenChat: { ru: "Открыть чат", uz: "Chatni ochish" },
   certStart: { ru: "Начать решение", uz: "Yechishni boshlash" },
   certContinue: { ru: "Продолжить", uz: "Davom ettirish" },
   certViewResult: { ru: "Посмотреть результат", uz: "Natijani ko'rish" },

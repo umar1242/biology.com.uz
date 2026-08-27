@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Camera, Check, Download, Send } from "lucide-react";
-import { apiFetch, apiFetchObjectUrl, ApiError } from "../lib/api";
-import { openBotChat } from "../lib/telegram";
+import { ArrowLeft, Camera, Check, FileDown, Send } from "lucide-react";
+import { apiFetch, ApiError } from "../lib/api";
+import { closeMiniApp, openBotChat } from "../lib/telegram";
 import { useI18n } from "../lib/i18n";
 
 type Task = {
@@ -50,6 +50,7 @@ export function CertExamPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [savingState, setSavingState] = useState<"idle" | "saving" | "saved">("idle");
+  const [fileSent, setFileSent] = useState(false);
   const pendingRef = useRef<Record<number, string | null>>({});
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -144,18 +145,18 @@ export function CertExamPage() {
   const answered = Object.values(local).filter(Boolean).length;
   const editable = a?.status === "in_progress";
 
-  // Fetched with the auth header, then handed to the browser as a blob URL:
-  // the raw endpoint is token-protected, so a plain link would 401. The URL
-  // is left alive deliberately — revoking it would break the opened tab.
-  async function downloadVariant() {
-    setError(null);
-    try {
-      const url = await apiFetchObjectUrl(`/app/cert-exams/${id}/variant-file/raw`);
-      window.open(url, "_blank");
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "download failed");
-    }
-  }
+  // Telegram's WebView blocks window.open on blob: URLs, so fetching the
+  // token-protected file and opening it in-page silently did nothing on a
+  // phone. The bot pushes it into the student's own chat instead.
+  const sendFile = useMutation({
+    mutationFn: () =>
+      apiFetch<{ sent: boolean }>(`/app/cert-exams/${id}/variant-file/send`, { method: "POST" }),
+    onSuccess: () => {
+      setFileSent(true);
+      setTimeout(() => setFileSent(false), 6000);
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : "error"),
+  });
 
   return (
     <div className="px-5 pt-6">
@@ -174,15 +175,28 @@ export function CertExamPage() {
       <div className="flex flex-col gap-3 pb-8">
         {exam.isLoading && <p className="text-sm text-muted">{t("loading")}</p>}
 
-        {exam.data?.has_variant_file && (
-          <button
-            type="button"
-            onClick={downloadVariant}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-line bg-card p-3.5 text-sm font-semibold text-ink"
-          >
-            <Download size={16} /> {t("certDownloadFile")}
-          </button>
-        )}
+        {exam.data?.has_variant_file &&
+          (fileSent ? (
+            <button
+              type="button"
+              onClick={closeMiniApp}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-pos-soft p-3.5 text-sm font-semibold text-pos"
+            >
+              <Check size={16} /> {t("certFileSent")} · {t("certOpenChat")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                sendFile.mutate();
+              }}
+              disabled={sendFile.isPending}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-line bg-card p-3.5 text-sm font-semibold text-ink disabled:opacity-50"
+            >
+              <FileDown size={16} /> {t("certSendFile")}
+            </button>
+          ))}
 
         {attemptId === null && (
           <button

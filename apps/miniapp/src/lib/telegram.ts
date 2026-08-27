@@ -4,6 +4,7 @@ type TelegramWebApp = {
   expand: () => void;
   colorScheme: "light" | "dark";
   openTelegramLink: (url: string) => void;
+  close?: () => void;
   onEvent?: (event: string, handler: () => void) => void;
   offEvent?: (event: string, handler: () => void) => void;
   setHeaderColor?: (color: string) => void;
@@ -81,4 +82,14 @@ export function openBotChat(deepLink: string) {
   } else {
     window.open(deepLink, "_blank");
   }
+}
+
+/**
+ * Closes the Mini App, which drops the user back into the bot chat. Used
+ * after the bot sends them something (the variant file): the thing they
+ * asked for is waiting in that chat, so returning to it IS the next step.
+ * Outside Telegram there is nothing to close, so this is a no-op.
+ */
+export function closeMiniApp() {
+  window.Telegram?.WebApp?.close?.();
 }

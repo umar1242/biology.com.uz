@@ -571,6 +571,10 @@ export const certExams = pgTable(
     // stored as a Telegram file_id like every other media in this project.
     variantFileId: text("variant_file_id"),
     variantFileName: text("variant_file_name"),
+    // Telegram file_ids are type-bound: a photo id must be re-sent with
+    // sendPhoto and a document id with sendDocument, so which handler
+    // ingested it has to be remembered to send it back to a student.
+    variantFileKind: text("variant_file_kind"),
     deadlineAt: timestamp("deadline_at", { withTimezone: true }).notNull(),
     // NULL = draft. A variant stays invisible to students until the teacher
     // has both attached the file and filled all 35 key entries.
@@ -581,6 +585,10 @@ export const certExams = pgTable(
   (table) => [
     index("idx_cert_exams_course").on(table.courseId),
     index("idx_cert_exams_deadline").on(table.deadlineAt),
+    check(
+      "cert_variant_file_kind_valid",
+      sql`${table.variantFileKind} IS NULL OR ${table.variantFileKind} IN ('photo','document')`,
+    ),
   ],
 );
 
