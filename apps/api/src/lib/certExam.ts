@@ -101,3 +101,17 @@ export function topicFor(n: number): CertTopic {
   if (n <= 35) return "logic";
   return "general_bio";
 }
+
+/**
+ * How many questions a new variant should carry over from earlier ones.
+ *
+ * Calibration fixes a scale only *within* one variant (its origin is set by
+ * that variant's own mean difficulty), so abilities measured on two
+ * unlinked variants are not comparable — a student's progress would be
+ * indistinguishable from the two variants differing in difficulty. Shared
+ * "anchor" questions, whose difficulty is already known, tie the scales
+ * together. The usual guidance is ~20% of the test; for 40 scored tasks
+ * that is 8. Advisory, never enforced: a deliberately all-new variant is a
+ * legitimate choice, it just cannot be linked to the others.
+ */
+export const RECOMMENDED_ANCHOR_COUNT = 8;

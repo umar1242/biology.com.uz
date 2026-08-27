@@ -276,7 +276,26 @@ SAME=$(PSQL "SELECT item_id FROM cert_exam_items WHERE exam_id=$EXAM2 AND task_n
 chk "same bank item in both variants" "$ITEM1" "$SAME" "item=$SAME"
 req GET /cert-items "" "$TT"
 chk "item now used in 2 variants" "2" "$(echo "$RB" | jq -r "[.[]|select(.id==$ITEM1)][0].used_in_variants")" "$RB"
+
+echo "== ANCHORS =="
+req GET "/cert-exams/$EXAM2" "" "$TT"
+chk "anchor counted in new variant" "1" "$(echo "$RB" | jq -r .anchor_count)" "$RB"
+chk "recommended anchors = 8" "8" "$(echo "$RB" | jq -r .anchor_recommended)" "$RB"
+req GET "/cert-exams/$EXAM" "" "$TT"
+chk "anchor also counted in origin variant" "1" "$(echo "$RB" | jq -r .anchor_count)" "$RB"
+
+req GET "/cert-exams/$EXAM2/anchor-candidates" "" "$TT"
+chk "candidates listed" 200 "$RS" "$RB"
+chk "candidates come from the other variant" "true" "$([ "$(echo "$RB" | jq -r 'length')" -ge 34 ] && echo true || echo false)" "кандидатов: $(echo "$RB" | jq -r 'length')"
+chk "taken anchor marked" "true" "$(echo "$RB" | jq -r "[.[]|select(.id==$ITEM1)][0].already_in_this_exam")" "$RB"
+chk "candidate carries key" "A" "$(echo "$RB" | jq -r "[.[]|select(.id==$ITEM1)][0].correct_option")" "$RB"
+chk "candidate carries source" "Spectrum 2026, вариант 1, №1" "$(echo "$RB" | jq -r "[.[]|select(.id==$ITEM1)][0].source_ref")" "$RB"
+req GET "/cert-exams/$EXAM2/anchor-candidates" "" "$BT"
+chk "other tenant blocked -> 404" 404 "$RS" "$RB"
+
 PSQL "DELETE FROM cert_exam_items WHERE exam_id=$EXAM2; DELETE FROM cert_exams WHERE id=$EXAM2;" >/dev/null
+req GET "/cert-exams/$EXAM" "" "$TT"
+chk "anchor count drops when other variant goes" "0" "$(echo "$RB" | jq -r .anchor_count)" "$RB"
 
 echo "== STATISTICS =="
 req GET /cert-items "" "$TT"

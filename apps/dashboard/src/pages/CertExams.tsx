@@ -1,13 +1,24 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, ClipboardList, FileText, Plus, Send, Trash2 } from "lucide-react";
+import { Anchor, CheckCircle2, ClipboardList, FileText, Plus, Send, Trash2 } from "lucide-react";
 import { TopBar } from "../components/TopBar";
 import { apiFetch, ApiError } from "../lib/api";
 import type { Course } from "../lib/types";
 import { claimDeepLinkTab } from "../lib/telegramLink";
 import { DeepLinkNotice } from "../components/DeepLinkNotice";
 import { useI18n } from "../lib/i18n";
+
+type AnchorCandidate = {
+  id: number;
+  task_number: number;
+  correct_option: string;
+  topic: string;
+  source_ref: string | null;
+  responses: number;
+  p_value: number | null;
+  already_in_this_exam: boolean;
+};
 
 type CertExam = {
   id: number;
@@ -20,6 +31,8 @@ type CertExam = {
   key_required: number;
   published: boolean;
   total_max_points: number;
+  anchor_count: number;
+  anchor_recommended: number;
 };
 
 type KeyEntry = { task_number: number; correct_option: string; source_ref: string | null };
@@ -45,6 +58,7 @@ function AnswerKeyEditor({ exam }: { exam: CertExam }) {
   // accumulating instead of starting over.
   const [sources, setSources] = useState<Record<number, string>>({});
   const [showSources, setShowSources] = useState(false);
+  const [showAnchors, setShowAnchors] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,17 +100,85 @@ function AnswerKeyEditor({ exam }: { exam: CertExam }) {
 
   const filled = Object.values(draft).filter(Boolean).length;
 
+  const candidates = useQuery({
+    queryKey: ["anchor-candidates", exam.id],
+    queryFn: () => apiFetch<AnchorCandidate[]>(`/cert-exams/${exam.id}/anchor-candidates`),
+    enabled: showAnchors,
+  });
+
+  /** Carrying an anchor over means copying BOTH its key and its citation —
+      the citation is what makes it resolve to the same bank question. */
+  function takeAnchor(c: AnchorCandidate) {
+    if (!c.source_ref) return;
+    setDraft((d) => ({ ...d, [c.task_number]: c.correct_option }));
+    setSources((sv) => ({ ...sv, [c.task_number]: c.source_ref! }));
+  }
+
   return (
     <div className="mt-4 rounded-2xl border border-line bg-inset p-4">
       <p className="text-sm font-semibold text-ink">{t("certKeyTitle")}</p>
       <p className="mt-1 mb-2 text-xs text-muted">{t("certKeyHint")}</p>
-      <button
-        type="button"
-        onClick={() => setShowSources((v) => !v)}
-        className="mb-3 text-xs font-medium text-brand"
-      >
-        {showSources ? "−" : "+"} {t("bankSource")}
-      </button>
+      <div className="mb-3 flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          onClick={() => setShowSources((v) => !v)}
+          className="text-xs font-medium text-brand"
+        >
+          {showSources ? "−" : "+"} {t("bankSource")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowAnchors((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-medium text-brand"
+        >
+          <Anchor size={12} /> {t("anchorsPick")}
+        </button>
+      </div>
+
+      {showAnchors && (
+        <div className="mb-4 rounded-xl border border-line bg-card p-3">
+          <p className="text-xs font-semibold text-ink">{t("anchorsTitle")}</p>
+          <p className="mt-1 mb-2 text-xs text-muted">{t("anchorsHint")}</p>
+          <p className="mb-3 text-xs text-muted">{t("anchorsSpread")}</p>
+
+          {candidates.isLoading && <p className="text-xs text-muted">{t("loading")}</p>}
+          {candidates.data?.length === 0 && (
+            <p className="text-xs text-muted">{t("anchorsNone")}</p>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            {candidates.data?.map((c) => (
+              <div
+                key={c.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-inset px-2.5 py-1.5"
+              >
+                <span className="w-6 text-xs font-semibold text-muted">{c.task_number}</span>
+                <span className="min-w-0 flex-1 basis-32 truncate text-xs text-ink">
+                  {c.source_ref ?? t("anchorsNeedSource")}
+                </span>
+                <span className="text-xs font-semibold text-ink">{c.correct_option}</span>
+                <span className="text-xs text-muted">
+                  {c.p_value === null ? t("bankNoData") : `${Math.round(c.p_value * 100)}%`}
+                  {" · "}
+                  {c.responses}
+                </span>
+                {c.already_in_this_exam ? (
+                  <span className="text-xs font-medium text-pos">{t("anchorsTaken")}</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!c.source_ref}
+                    onClick={() => takeAnchor(c)}
+                    className="rounded-lg bg-brand px-2 py-1 text-xs font-semibold text-on-brand disabled:opacity-40"
+                  >
+                    {t("anchorsUse")}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-2">
         {Array.from({ length: 35 }, (_, i) => i + 1).map((n) => (
@@ -245,6 +327,17 @@ function ExamCard({ exam }: { exam: CertExam }) {
           <CheckCircle2 size={12} />
           {t("certKeyProgress", { filled: exam.key_filled, required: exam.key_required })}
         </span>
+        <span
+          title={t("anchorsHint")}
+          className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium ${
+            exam.anchor_count >= exam.anchor_recommended
+              ? "bg-pos-soft text-pos"
+              : "bg-inset text-muted"
+          }`}
+        >
+          <Anchor size={12} />
+          {t("anchorsLabel", { n: exam.anchor_count, need: exam.anchor_recommended })}
+        </span>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -272,7 +365,23 @@ function ExamCard({ exam }: { exam: CertExam }) {
         </button>
         <button
           type="button"
-          onClick={() => publish.mutate()}
+          onClick={() => {
+            // Advisory, not a gate: an all-new variant is a legitimate
+            // choice, it just cannot be put on the same scale as the others.
+            if (
+              !exam.published &&
+              exam.anchor_count < exam.anchor_recommended &&
+              !window.confirm(
+                t("anchorsWarnPublish", {
+                  n: exam.anchor_count,
+                  need: exam.anchor_recommended,
+                }),
+              )
+            ) {
+              return;
+            }
+            publish.mutate();
+          }}
           disabled={publish.isPending || (!ready && !exam.published)}
           title={!ready && !exam.published ? t("certPublishBlocked") : undefined}
           className="rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-on-brand hover:opacity-90 disabled:opacity-50"

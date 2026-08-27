@@ -121,6 +121,34 @@ const STRINGS = {
   bankFilterProblem: { ru: "Проблемные", uz: "Muammoli" },
   bankSaved: { ru: "Сохранено", uz: "Saqlandi" },
 
+  // --- anchors ---
+  anchorsLabel: { ru: "Якорей: {n} из {need}", uz: "Langarlar: {need} dan {n}" },
+  anchorsTitle: { ru: "Якорные задания", uz: "Langar topshiriqlar" },
+  anchorsHint: {
+    ru: "Задания, повторяющиеся из прошлых вариантов. Они связывают варианты в одну шкалу — без них результаты разных вариантов несопоставимы.",
+    uz: "Oldingi variantlardan takrorlanadigan topshiriqlar. Ular variantlarni yagona shkalaga bog'laydi — ularsiz natijalarni taqqoslab bo'lmaydi.",
+  },
+  anchorsPick: { ru: "Подобрать якори", uz: "Langarlarni tanlash" },
+  anchorsNone: {
+    ru: "Нет подходящих заданий: в этом курсе пока нет других вариантов с заполненным ключом.",
+    uz: "Mos topshiriq yo'q: bu kursda kaliti to'ldirilgan boshqa variant hali yo'q.",
+  },
+  anchorsNeedSource: {
+    ru: "Чтобы задание стало якорем, у него должен быть указан источник — заполните его в банке заданий.",
+    uz: "Topshiriq langar bo'lishi uchun manbasi ko'rsatilgan bo'lishi kerak — uni topshiriqlar bankida to'ldiring.",
+  },
+  anchorsUse: { ru: "Взять", uz: "Olish" },
+  anchorsTaken: { ru: "Уже в варианте", uz: "Variantda bor" },
+  anchorsSpread: {
+    ru: "Берите и лёгкие, и трудные — якори должны покрывать весь диапазон.",
+    uz: "Oson va qiyinlarini ham oling — langarlar butun diapazonni qamrashi kerak.",
+  },
+  anchorsWarnPublish: {
+    ru: "Якорей всего {n} (рекомендуется {need}). Результаты этого варианта нельзя будет сравнить с другими. Всё равно опубликовать?",
+    uz: "Langarlar {n} ta (tavsiya: {need}). Bu variant natijalarini boshqalari bilan solishtirib bo'lmaydi. Baribir chop etilsinmi?",
+  },
+  anchorsOk: { ru: "Якорей достаточно", uz: "Langarlar yetarli" },
+
   // --- topics from the spec ---
   topicLifeScience: { ru: "Биология как наука", uz: "Biologiya fan sifatida" },
   topicCell: { ru: "Клетка, обмен веществ, генетика", uz: "Hujayra, moddalar almashinuvi, genetika" },

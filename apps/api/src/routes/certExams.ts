@@ -18,6 +18,7 @@ import { fetchTelegramFile } from "../telegram/client.js";
 import {
   AUTO_MAX_POINTS,
   KEY_TASK_NUMBERS,
+  RECOMMENDED_ANCHOR_COUNT,
   PHOTO_TASK_NUMBERS,
   TOTAL_MAX_POINTS,
   isClosedTask,
@@ -103,9 +104,28 @@ async function keyMapFor(examId: number): Promise<Map<number, string>> {
   );
 }
 
+/**
+ * Questions this variant shares with another one. Those are what link the
+ * two variants onto a single scale, so the teacher needs to see the number
+ * while composing, not after the fact.
+ */
+async function anchorCountFor(examId: number): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(certExamItems)
+    .where(
+      and(
+        eq(certExamItems.examId, examId),
+        sql`(SELECT count(*) FROM cert_exam_items o WHERE o.item_id = ${certExamItems.itemId}) > 1`,
+      ),
+    );
+  return row?.n ?? 0;
+}
+
 /** Shape returned for a single exam, including how ready it is to publish. */
 async function describeExam(exam: typeof certExams.$inferSelect) {
   const keyCount = await keyCountFor(exam.id);
+  const anchorCount = await anchorCountFor(exam.id);
   return {
     id: exam.id,
     course_id: exam.courseId,
@@ -115,6 +135,8 @@ async function describeExam(exam: typeof certExams.$inferSelect) {
     variant_file_name: exam.variantFileName,
     key_filled: keyCount,
     key_required: KEY_TASK_NUMBERS.length,
+    anchor_count: anchorCount,
+    anchor_recommended: RECOMMENDED_ANCHOR_COUNT,
     published: exam.publishedAt !== null,
     published_at: exam.publishedAt,
     total_max_points: TOTAL_MAX_POINTS,
@@ -514,6 +536,63 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
     });
 
     return describeExam(exam);
+  });
+
+
+  /**
+   * Questions from this course's other variants, offered as anchors.
+   *
+   * Sorted by how hard they turned out to be, because a good anchor set
+   * spans the difficulty range rather than clustering — picking eight easy
+   * questions links the scales badly. Only tasks 1–35 are listed: an anchor
+   * has to carry a known key over to the new variant, and open tasks have
+   * none.
+   */
+  app.get("/cert-exams/:id/anchor-candidates", async (request) => {
+    const auth = requireAuth(request);
+    const exam = await loadAccessibleExam(auth, Number((request.params as { id: string }).id));
+
+    const rows = await db
+      .select({
+        id: certItems.id,
+        taskNumber: certItems.taskNumber,
+        correctOption: certItems.correctOption,
+        topic: certItems.topic,
+        sourceRef: certItems.sourceRef,
+        responses: sql<number>`count(${certExamAnswers.isCorrect})::int`,
+        correct: sql<number>`count(*) FILTER (WHERE ${certExamAnswers.isCorrect})::int`,
+        alreadyHere: sql<number>`(
+          SELECT count(*)::int FROM cert_exam_items ei
+          WHERE ei.item_id = ${certItems.id} AND ei.exam_id = ${exam.id}
+        )`,
+      })
+      .from(certItems)
+      .innerJoin(certExamItems, eq(certExamItems.itemId, certItems.id))
+      .innerJoin(certExams, eq(certExams.id, certExamItems.examId))
+      .leftJoin(certExamAnswers, eq(certExamAnswers.itemId, certItems.id))
+      .where(
+        and(
+          eq(certItems.teacherId, auth.teacherId),
+          eq(certExams.courseId, exam.courseId),
+          sql`${certExams.id} <> ${exam.id}`,
+          sql`${certItems.correctOption} IS NOT NULL`,
+        ),
+      )
+      .groupBy(certItems.id)
+      .orderBy(certItems.taskNumber);
+
+    return rows.map((r) => ({
+      id: r.id,
+      task_number: r.taskNumber,
+      correct_option: r.correctOption,
+      topic: r.topic,
+      // Without a citation the question cannot be carried into a new
+      // variant as the same item, so the UI prompts for one first.
+      source_ref: r.sourceRef,
+      responses: r.responses,
+      p_value: r.responses > 0 ? r.correct / r.responses : null,
+      already_in_this_exam: r.alreadyHere > 0,
+    }));
   });
 
   // --- variant file & publishing --------------------------------------
