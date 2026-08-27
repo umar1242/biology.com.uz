@@ -111,7 +111,7 @@ export function LessonDetailPage() {
 
   return (
     <>
-      <TopBar title={l.title} />
+      <TopBar title={l.title} backTo={`/courses/${l.courseId}/modules/${l.moduleId}`} />
       <main className="max-w-2xl px-4 pb-10 sm:px-8">
         {error && <p className="mb-4 text-sm text-neg">{error}</p>}
 

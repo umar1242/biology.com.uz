@@ -76,6 +76,7 @@ export type Module = {
 export type Lesson = {
   id: number;
   moduleId: number;
+  courseId: number;
   title: string;
   description: string | null;
   orderIndex: number;

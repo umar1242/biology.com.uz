@@ -4,7 +4,11 @@ import { z } from "zod";
 import { db } from "../db/client.js";
 import { lessons } from "../db/schema.js";
 import { requireAuth, requireTeacher } from "../plugins/auth.js";
-import { loadAccessibleLesson, loadAccessibleModule } from "../lib/access.js";
+import {
+  loadAccessibleLesson,
+  loadAccessibleModule,
+  resolveCourseIdForLesson,
+} from "../lib/access.js";
 import { Unprocessable } from "../lib/errors.js";
 import { createPendingActionDeepLink } from "../telegram/pendingActions.js";
 
@@ -85,7 +89,12 @@ const lessonRoutes: FastifyPluginAsync = async (app) => {
   app.get("/lessons/:id", async (request) => {
     const auth = requireAuth(request);
     const id = Number((request.params as { id: string }).id);
-    return loadAccessibleLesson(auth, id);
+    const lesson = await loadAccessibleLesson(auth, id);
+    // The lesson page needs its course to offer an "up" link back to the
+    // module (route is /courses/:courseId/modules/:moduleId) — a lesson row
+    // only carries moduleId, so resolve the course here.
+    const courseId = await resolveCourseIdForLesson(id);
+    return { ...lesson, courseId };
   });
 
   app.patch("/lessons/:id", async (request) => {
