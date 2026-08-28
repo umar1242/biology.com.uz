@@ -29,6 +29,13 @@ type Attempt = {
   total_score: number | null;
   total_max_points: number;
   review_comment_text: string | null;
+  cert_estimate: {
+    test: number;
+    written: number;
+    total: number;
+    percent: number;
+    grade: "A+" | "A" | "B+" | "B" | "C+" | "C" | null;
+  } | null;
   tasks: AttemptTask[];
 };
 
@@ -166,6 +173,37 @@ export function CertAttemptPage() {
                 </p>
               </div>
             </div>
+
+            {/* Shown once reviewed: the server owns this formula so the number
+                the teacher sees is the same one the student is shown. */}
+            {a.cert_estimate && (
+              <div className="mb-5 rounded-2xl border border-line bg-card p-4">
+                <div className="mb-3 flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-semibold text-ink">{t("certScaleTitle")}</p>
+                  <p className="text-xs text-muted">{a.cert_estimate.percent}%</p>
+                </div>
+                <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+                  <div>
+                    <p className="text-xs text-muted">{t("certHalfTest")}</p>
+                    <p className="text-lg font-semibold text-ink">{a.cert_estimate.test}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">{t("certHalfWritten")}</p>
+                    <p className="text-lg font-semibold text-ink">{a.cert_estimate.written}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted">{t("certScaleTotal")}</p>
+                    <p className="text-lg font-semibold text-ink">
+                      {a.cert_estimate.total}
+                      <span className="ml-2 text-base font-bold text-brand">
+                        {a.cert_estimate.grade ?? t("certNoGrade")}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs leading-snug text-muted">{t("certScaleHint")}</p>
+              </div>
+            )}
 
             <p className="mb-4 text-xs text-muted">
               {a.submitted_at ? formatDateTime(a.submitted_at) : "—"}

@@ -31,6 +31,8 @@ import {
   TOTAL_MAX_POINTS,
   isClosedTask,
   maxPointsFor,
+  estimateCertScore,
+  splitHalves,
   optionsFor,
 } from "../lib/certExam.js";
 
@@ -1081,6 +1083,7 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       manual_score: attempt.manualScore,
       total_score: attempt.totalScore,
       total_max_points: TOTAL_MAX_POINTS,
+      cert_estimate: attempt.status === "reviewed" ? estimateCertScore(splitHalves(answers)) : null,
       review_comment_text: attempt.reviewCommentText,
       tasks: Array.from({ length: 43 }, (_, i) => i + 1).map((n) => {
         const a = answerByTask.get(n);
@@ -1193,6 +1196,14 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         .where(eq(certExamAttempts.id, attemptId));
     });
 
+    // Re-read the graded answers to report where the attempt lands on the
+    // certificate scale — the stored manualScore lumps 36–43 together, while
+    // the certificate splits the halves between 40 and 41.
+    const gradedAnswers = await db
+      .select()
+      .from(certExamAnswers)
+      .where(eq(certExamAnswers.attemptId, attemptId));
+
     const [updated] = await db
       .select()
       .from(certExamAttempts)
@@ -1205,6 +1216,7 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       manual_score: updated.manualScore,
       total_score: updated.totalScore,
       total_max_points: TOTAL_MAX_POINTS,
+      cert_estimate: estimateCertScore(splitHalves(gradedAnswers)),
     };
   });
 };

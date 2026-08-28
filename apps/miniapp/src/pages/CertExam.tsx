@@ -29,6 +29,13 @@ type Attempt = {
   total_score: number | null;
   total_max_points: number;
   review_comment_text: string | null;
+  cert_estimate: {
+    test: number;
+    written: number;
+    total: number;
+    percent: number;
+    grade: "A+" | "A" | "B+" | "B" | "C+" | "C" | null;
+  } | null;
   tasks: Task[];
 };
 
@@ -230,6 +237,35 @@ export function CertExamPage() {
                 </p>
               </div>
             </div>
+            {a.cert_estimate && (
+              <div className="mt-4 rounded-xl border border-line bg-inset p-3.5">
+                <div className="mb-2.5 flex items-baseline justify-between gap-2">
+                  <p className="text-xs font-medium text-muted">{t("certScaleTitle")}</p>
+                  <p className="text-xs text-muted">{a.cert_estimate.percent}%</p>
+                </div>
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] text-muted">{t("certHalfTest")}</p>
+                    <p className="text-sm font-semibold text-ink">{a.cert_estimate.test}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted">{t("certHalfWritten")}</p>
+                    <p className="text-sm font-semibold text-ink">{a.cert_estimate.written}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] text-muted">{t("certScaleTotal")}</p>
+                    <p className="text-xl font-bold text-ink">
+                      {a.cert_estimate.total}
+                      <span className="ml-1.5 text-sm font-semibold text-brand">
+                        {a.cert_estimate.grade ?? t("certNoGrade")}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-2.5 text-[11px] leading-snug text-muted">{t("certScaleHint")}</p>
+              </div>
+            )}
+
             {a.review_comment_text && (
               <div className="mt-3 rounded-xl bg-inset p-3">
                 <p className="text-xs font-medium text-muted">{t("certTeacherComment")}</p>

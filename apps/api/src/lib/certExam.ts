@@ -186,3 +186,131 @@ export const DEAD_DISTRACTOR_SHARE = 0.05;
 export function itemCode(id: number, taskNumber: number): string {
   return `${taskNumber}-${String(id).padStart(4, "0")}`;
 }
+
+// ---------------------------------------------------------------------
+// Final score, in the shape the national certificate actually reports.
+// ---------------------------------------------------------------------
+
+/**
+ * The real certificate carries three numbers: a test result, a written-work
+ * result, and a total that is their plain arithmetic mean — verified against
+ * an issued certificate (46.71 and 48.62 → 47.67), with the grade band
+ * matching the agency's published table.
+ *
+ * So the written half — three tasks — weighs exactly as much as the forty
+ * test tasks. Scoring an attempt out of a flat 115 points hides that: it
+ * gives the written part 65% of the weight instead of 50%, which reorders
+ * students against how the real exam would rank them.
+ */
+
+/** Score reported as 100%. Above it the percentage caps but the grade rises. */
+export const CERT_SCALE_REFERENCE = 65;
+
+/** Tasks 1–40: closed plus short-answer, one point each on this platform. */
+export const TEST_HALF_TASK_COUNT = 40;
+
+/** Tasks 41–43, the written work: 30 + 35 + 10 (spec §VIII.2). */
+export const WRITTEN_HALF_MAX_POINTS = 75;
+
+export type CertGrade = "A+" | "A" | "B+" | "B" | "C+" | "C";
+
+/**
+ * Grade bands as published by the assessment agency. Returns null below 46 —
+ * no certificate is issued at all, which is a different statement from "a low
+ * grade" and the UI must not blur the two.
+ *
+ * The published bands leave a hairline gap: A ends at 69.9 and A+ starts
+ * "above 70". Exactly 70.0 is read here as A, the conservative side.
+ */
+export function certGrade(score: number): CertGrade | null {
+  if (score > 70) return "A+";
+  if (score >= 65) return "A";
+  if (score >= 60) return "B+";
+  if (score >= 55) return "B";
+  if (score >= 50) return "C+";
+  if (score >= 46) return "C";
+  return null;
+}
+
+export type CertScoreEstimate = {
+  /** Test half (tasks 1–40) on the national scale. */
+  test: number;
+  /** Written half (tasks 41–43) on the national scale. */
+  written: number;
+  /** Their mean — what the certificate calls "umumiy to'plagan ball". */
+  total: number;
+  /** total / 65, capped at 100 exactly as the certificate does. */
+  percent: number;
+  grade: CertGrade | null;
+};
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Estimates where an attempt would land on the certificate scale.
+ *
+ * Deliberately an ESTIMATE, and callers must present it as one: the real test
+ * half is scored with a Rasch model, where a correct answer to a hard task is
+ * worth more than to an easy one and difficulty comes from a nationwide
+ * cohort. Here it is a plain share of correct answers, so two students who
+ * solved the same NUMBER of tasks score identically even when one solved the
+ * harder ones. A+ is unreachable by construction: it means the model placed a
+ * student above the reference point, which a share of correct answers cannot
+ * express.
+ */
+export function estimateCertScore(params: {
+  /** Correct answers among tasks 1–40. */
+  testCorrect: number;
+  /** Points awarded for tasks 41–43. */
+  writtenPoints: number;
+}): CertScoreEstimate {
+  const testFraction = clampFraction(params.testCorrect / TEST_HALF_TASK_COUNT);
+  const writtenFraction = clampFraction(params.writtenPoints / WRITTEN_HALF_MAX_POINTS);
+
+  const test = testFraction * CERT_SCALE_REFERENCE;
+  const written = writtenFraction * CERT_SCALE_REFERENCE;
+  const total = (test + written) / 2;
+
+  return {
+    test: round2(test),
+    written: round2(written),
+    total: round2(total),
+    percent: round2(Math.min(total / CERT_SCALE_REFERENCE, 1) * 100),
+    grade: certGrade(total),
+  };
+}
+
+function clampFraction(value: number): number {
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return value > 1 ? 1 : value;
+}
+
+/**
+ * Splits graded answers into the two halves the certificate reports.
+ *
+ * Needed because the platform stores one `manualScore` covering tasks 36–43,
+ * while the certificate draws its line between 40 and 41: short answers count
+ * toward the test half, only the extended written work forms the other.
+ */
+export function splitHalves(
+  answers: { taskNumber: number; isCorrect?: boolean | null; awardedPoints?: number | null }[],
+): { testCorrect: number; writtenPoints: number } {
+  let testCorrect = 0;
+  let writtenPoints = 0;
+
+  for (const a of answers) {
+    if (!isValidTaskNumber(a.taskNumber)) continue;
+    if (isClosedTask(a.taskNumber)) {
+      if (a.isCorrect) testCorrect += 1;
+    } else if (taskKind(a.taskNumber) === "open_short") {
+      // Short answers are worth one point, same as a closed task.
+      if ((a.awardedPoints ?? 0) > 0) testCorrect += 1;
+    } else {
+      writtenPoints += a.awardedPoints ?? 0;
+    }
+  }
+
+  return { testCorrect, writtenPoints };
+}

@@ -1,21 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  isValidTaskNumber,
-  taskKind,
-  optionsFor,
-  isClosedTask,
-  maxPointsFor,
-  topicFor,
-  taskTypeFor,
-  discriminationBand,
-  itemCode,
   ALL_TASK_NUMBERS,
+  AUTO_MAX_POINTS,
+  CERT_TASK_MAX,
   KEY_TASK_NUMBERS,
   PHOTO_TASK_NUMBERS,
   TOTAL_MAX_POINTS,
-  AUTO_MAX_POINTS,
-  CERT_TASK_MAX,
+  certGrade,
+  discriminationBand,
+  estimateCertScore,
+  isClosedTask,
+  isValidTaskNumber,
+  itemCode,
+  maxPointsFor,
+  optionsFor,
+  taskKind,
+  taskTypeFor,
+  topicFor,
 } from "./certExam.js";
 
 // Pure structure/scoring/statistics helpers — the one place with real
@@ -115,4 +117,78 @@ test("itemCode is <task>-<zero-padded id>", () => {
   assert.equal(itemCode(7, 12), "12-0007");
   assert.equal(itemCode(1234, 5), "5-1234");
   assert.equal(itemCode(1, 43), "43-0001");
+});
+
+// --- final score on the certificate scale ---
+
+test("total is the plain mean of the two halves", () => {
+  // A real issued certificate reports test 46.71, written 48.62, total 47.67 —
+  // the mean, not a weighted sum. This is the property that must hold.
+  const half = estimateCertScore({ testCorrect: 40, writtenPoints: 0 });
+  assert.equal(half.test, 65);
+  assert.equal(half.written, 0);
+  assert.equal(half.total, 32.5);
+
+  const other = estimateCertScore({ testCorrect: 0, writtenPoints: 75 });
+  assert.equal(other.total, 32.5, "the written half weighs exactly as much as the test half");
+});
+
+test("three written tasks carry the same weight as forty test tasks", () => {
+  // The whole reason for this scale: under the old flat 115-point total the
+  // written part was 65% of the score. Here the two halves must be equal.
+  const allTest = estimateCertScore({ testCorrect: 40, writtenPoints: 0 });
+  const allWritten = estimateCertScore({ testCorrect: 0, writtenPoints: 75 });
+  assert.equal(allTest.total, allWritten.total);
+});
+
+test("a perfect attempt reaches the reference score and 100%", () => {
+  const perfect = estimateCertScore({ testCorrect: 40, writtenPoints: 75 });
+  assert.equal(perfect.total, 65);
+  assert.equal(perfect.percent, 100);
+  assert.equal(perfect.grade, "A", "A+ is unreachable without a Rasch estimate above the reference");
+});
+
+test("an empty attempt earns no certificate at all", () => {
+  const none = estimateCertScore({ testCorrect: 0, writtenPoints: 0 });
+  assert.equal(none.total, 0);
+  assert.equal(none.percent, 0);
+  assert.equal(none.grade, null, "below 46 there is no certificate, not a low grade");
+});
+
+test("grade bands match the agency's published table", () => {
+  assert.equal(certGrade(70.1), "A+");
+  assert.equal(certGrade(69.9), "A");
+  assert.equal(certGrade(65), "A");
+  assert.equal(certGrade(64.9), "B+");
+  assert.equal(certGrade(60), "B+");
+  assert.equal(certGrade(59.9), "B");
+  assert.equal(certGrade(55), "B");
+  assert.equal(certGrade(54.9), "C+");
+  assert.equal(certGrade(50), "C+");
+  assert.equal(certGrade(49.9), "C");
+  assert.equal(certGrade(46), "C", "46 is the exact floor for a certificate");
+  assert.equal(certGrade(45.99), null);
+});
+
+test("exactly 70 falls on the conservative side of the published gap", () => {
+  // The table lists A as 65–69.9 and A+ as "above 70", leaving 70.0 unnamed.
+  assert.equal(certGrade(70), "A");
+});
+
+test("percentage caps at 100 while the grade keeps climbing", () => {
+  // Mirrors the real certificate: past the reference the percentage stops
+  // moving but the band still rises.
+  assert.equal(certGrade(72), "A+");
+  const capped = estimateCertScore({ testCorrect: 999, writtenPoints: 999 });
+  assert.equal(capped.percent, 100);
+  assert.equal(capped.total, 65, "impossible inputs are clamped, never extrapolated");
+});
+
+test("a middling attempt lands where the bands say it should", () => {
+  // 30/40 and 50/75 → both halves two thirds-ish, total just under C.
+  const e = estimateCertScore({ testCorrect: 30, writtenPoints: 50 });
+  assert.equal(e.test, 48.75);
+  assert.equal(e.written, 43.33);
+  assert.equal(e.total, 46.04);
+  assert.equal(e.grade, "C");
 });

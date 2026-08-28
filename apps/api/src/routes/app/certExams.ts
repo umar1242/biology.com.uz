@@ -24,6 +24,8 @@ import {
   isClosedTask,
   isValidTaskNumber,
   maxPointsFor,
+  estimateCertScore,
+  splitHalves,
   optionsFor,
 } from "../../lib/certExam.js";
 
@@ -290,6 +292,10 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
       manual_score: reviewed ? attempt.manualScore : null,
       total_score: reviewed ? attempt.totalScore : null,
       total_max_points: TOTAL_MAX_POINTS,
+      // Where this attempt would land on the national certificate scale.
+      // An estimate, and labelled as one in the UI: the real test half is
+      // scored with a Rasch model, not a share of correct answers.
+      cert_estimate: reviewed ? estimateCertScore(splitHalves(answers)) : null,
       review_comment_text: reviewed ? attempt.reviewCommentText : null,
       tasks: Array.from({ length: 43 }, (_, i) => i + 1).map((n) => {
         const a = byTask.get(n);
