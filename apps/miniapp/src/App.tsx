@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/Home";
-import { CoursesPage } from "./pages/Courses";
 import { ModulesPage } from "./pages/Modules";
 import { LessonsPage } from "./pages/Lessons";
 import { LessonDetailPage } from "./pages/LessonDetail";
@@ -12,6 +11,7 @@ import { ProfilePage } from "./pages/Profile";
 import { CertListPage } from "./pages/CertList";
 import { CertExamPage } from "./pages/CertExam";
 import { useAuth } from "./lib/auth";
+import { SelectedCourseProvider } from "./lib/selectedCourse";
 import { useI18n, type StringKey } from "./lib/i18n";
 
 function Gate({ children }: { children: ReactNode }) {
@@ -41,21 +41,22 @@ function Gate({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <Gate>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/courses" element={<CoursesPage />} />
-          <Route path="/courses/:courseId" element={<ModulesPage />} />
-          <Route path="/courses/:courseId/modules/:moduleId" element={<LessonsPage />} />
-          <Route path="/lessons/:id" element={<LessonDetailPage />} />
-          <Route path="/homework" element={<HomeworkListPage />} />
-          <Route path="/homework/:id" element={<HomeworkDetailPage />} />
-          <Route path="/cert" element={<CertListPage />} />
-          <Route path="/cert/:id" element={<CertExamPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <SelectedCourseProvider>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/courses" element={<ModulesPage />} />
+            <Route path="/courses/:courseId/modules/:moduleId" element={<LessonsPage />} />
+            <Route path="/lessons/:id" element={<LessonDetailPage />} />
+            <Route path="/homework" element={<HomeworkListPage />} />
+            <Route path="/homework/:id" element={<HomeworkDetailPage />} />
+            <Route path="/cert" element={<CertListPage />} />
+            <Route path="/cert/:id" element={<CertExamPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </SelectedCourseProvider>
     </Gate>
   );
 }

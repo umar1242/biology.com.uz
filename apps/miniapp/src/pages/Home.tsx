@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, BookOpen, ChevronRight, Plus } from "lucide-react";
+import { ArrowUpRight, BookOpen, Check, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { AppHeader } from "../components/AppHeader";
 import { apiFetch } from "../lib/api";
 import type { HomeworkListItem, Profile } from "../lib/types";
 import { homeworkStatusLabel } from "../lib/statusLabels";
+import { useSelectedCourse } from "../lib/selectedCourse";
 import { useI18n } from "../lib/i18n";
 
 export function HomePage() {
@@ -16,15 +18,74 @@ export function HomePage() {
     queryFn: () => apiFetch<HomeworkListItem[]>("/app/homework"),
   });
 
+  const { courses: switcherCourses, selectedCourse, selectedCourseId, setSelectedCourseId } = useSelectedCourse();
+  const [courseMenuOpen, setCourseMenuOpen] = useState(false);
+
   const courses = profile.data?.courses ?? [];
   const activeCourses = courses.filter((c) => c.access_status === "active").length;
-  const items = homework.data ?? [];
+  // Everything below the switcher is scoped to the active course, so one
+  // course's assignments never show up while another is selected.
+  const allItems = homework.data ?? [];
+  const items = selectedCourseId ? allItems.filter((h) => h.course_id === selectedCourseId) : allItems;
   const toDo = items.filter((h) => h.status === "not_submitted" || h.status === "needs_resubmission").length;
   const onReview = items.filter((h) => h.status === "pending").length;
 
   return (
     <div className="px-4 pt-5">
       <AppHeader name={profile.data?.first_name} />
+
+      {switcherCourses.length > 0 && (
+        <div className="relative z-30 mb-4">
+          <button
+            type="button"
+            onClick={() => switcherCourses.length > 1 && setCourseMenuOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-card px-4 py-2.5 text-left"
+          >
+            <span className="min-w-0 truncate text-[15px] font-semibold text-ink">
+              {selectedCourse?.title ?? switcherCourses[0]?.title}
+            </span>
+            {switcherCourses.length > 1 && (
+              <ChevronDown
+                size={18}
+                className={`shrink-0 text-muted transition-transform ${courseMenuOpen ? "rotate-180" : ""}`}
+              />
+            )}
+          </button>
+          {courseMenuOpen && (
+            <>
+              {/* Click-away layer — a tap anywhere else closes the menu. */}
+              <button
+                type="button"
+                aria-hidden
+                tabIndex={-1}
+                onClick={() => setCourseMenuOpen(false)}
+                className="fixed inset-0 z-10 cursor-default"
+              />
+              <div className="absolute inset-x-0 top-full z-20 mt-1.5 overflow-hidden rounded-xl border border-line bg-card shadow-lg">
+                {switcherCourses.map((c) => {
+                  const active = c.id === selectedCourseId;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCourseId(c.id);
+                        setCourseMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between gap-2 border-b border-line/60 px-4 py-3 text-left text-[14px] last:border-0 ${
+                        active ? "font-semibold text-ink" : "text-muted"
+                      }`}
+                    >
+                      <span className="min-w-0 truncate">{c.title}</span>
+                      {active && <Check size={16} className="shrink-0 text-ink" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Hero — mirrors the reference's balance card: one headline figure, the
           breakdown under it, and the two primary actions on the same surface. */}
