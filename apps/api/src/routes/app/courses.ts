@@ -3,7 +3,12 @@ import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { db } from "../../db/client.js";
 import { courseAccess, courseBlacklist, courses, lessonMaterials, lessons, modules } from "../../db/schema.js";
 import { requireStudentAuth } from "../../plugins/studentAuth.js";
-import { loadStudentAccessibleCourse, loadStudentAccessibleLesson, loadStudentAccessibleModule } from "../../lib/studentAccess.js";
+import {
+  assertNotFrozen,
+  loadStudentAccessibleCourse,
+  loadStudentAccessibleLesson,
+  loadStudentAccessibleModule,
+} from "../../lib/studentAccess.js";
 import { bot } from "../../telegram/bot.js";
 import { AppError, NotFound } from "../../lib/errors.js";
 
@@ -93,6 +98,8 @@ const appCourseRoutes: FastifyPluginAsync = async (app) => {
     const auth = requireStudentAuth(request);
     const id = Number((request.params as { id: string }).id);
     const lesson = await loadStudentAccessibleLesson(auth.studentId, id);
+    const [module_] = await db.select().from(modules).where(eq(modules.id, lesson.moduleId)).limit(1);
+    if (module_) await assertNotFrozen(auth.studentId, module_.courseId);
 
     const fileId = lesson.lessonType === "live" ? lesson.liveRecordingFileId : lesson.recordedVideoFileId;
     if (!fileId) {

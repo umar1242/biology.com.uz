@@ -7,7 +7,8 @@ type StaffNotificationType =
   | "access_expiring_soon"
   | "access_expired"
   | "blacklist_event"
-  | "unreviewed_homework_summary";
+  | "unreviewed_homework_summary"
+  | "trial_expired";
 
 type StudentNotificationType = "live_lesson_reminder" | "homework_deadline_reminder" | "new_material_published";
 

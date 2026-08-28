@@ -1,8 +1,33 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { courseAccess, courseBlacklist, courses, lessons, modules } from "../db/schema.js";
-import { NotFound } from "./errors.js";
+import { AppError, NotFound } from "./errors.js";
 import { resolveCourseIdForHomework } from "./access.js";
+
+/**
+ * Blocks the actions a frozen (unpaid-after-trial) student may not take:
+ * pulling a lesson video into chat, submitting homework, sitting a cert exam.
+ * Deliberately NOT part of loadStudentAccessibleCourse — a frozen student
+ * keeps full read access and still sees the whole course, so freezing shows
+ * up only at the moment they try to do something.
+ *
+ * 403 with a distinct code rather than 404: the Mini App turns `access_frozen`
+ * into an explanatory banner, and hiding the reason would just look broken.
+ */
+export async function assertNotFrozen(studentId: number, courseId: number): Promise<void> {
+  const [access] = await db
+    .select({ isFrozen: courseAccess.isFrozen })
+    .from(courseAccess)
+    .where(and(eq(courseAccess.studentId, studentId), eq(courseAccess.courseId, courseId)))
+    .limit(1);
+  if (access?.isFrozen) {
+    throw new AppError(
+      403,
+      "access_frozen",
+      "Доступ приостановлен: пробный период закончился. Свяжитесь с преподавателем.",
+    );
+  }
+}
 
 /**
  * Loads a course and enforces the student-facing visibility rule from

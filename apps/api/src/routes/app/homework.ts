@@ -11,7 +11,7 @@ import {
   modules,
 } from "../../db/schema.js";
 import { requireStudentAuth } from "../../plugins/studentAuth.js";
-import { loadStudentAccessibleHomeworkContext } from "../../lib/studentAccess.js";
+import { assertNotFrozen, loadStudentAccessibleHomeworkContext } from "../../lib/studentAccess.js";
 import { createPendingActionDeepLink } from "../../telegram/pendingActions.js";
 import { NotFound } from "../../lib/errors.js";
 
@@ -124,7 +124,8 @@ const appHomeworkRoutes: FastifyPluginAsync = async (app) => {
   app.post("/app/homework/:id/submit-start", async (request) => {
     const auth = requireStudentAuth(request);
     const id = Number((request.params as { id: string }).id);
-    await loadStudentAccessibleHomeworkContext(auth.studentId, id);
+    const { courseId } = await loadStudentAccessibleHomeworkContext(auth.studentId, id);
+    await assertNotFrozen(auth.studentId, courseId);
 
     const deepLink = await createPendingActionDeepLink({
       actionType: "submit_homework",

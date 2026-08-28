@@ -26,14 +26,6 @@ const STRINGS = {
     uz: "Salom! Agar o'qituvchidan kurs havolasi bo'lsa, boshlash uchun shu havolaga o'ting.",
   },
   courseNotFound: { ru: "Курс не найден.", uz: "Kurs topilmadi." },
-  alreadyEnrolled: {
-    ru: "Вы уже зарегистрированы на курс «{course}».",
-    uz: "Siz «{course}» kursiga allaqachon yozilgansiz.",
-  },
-  enrolled: {
-    ru: "Вы записались на курс «{course}». Доступ откроет преподаватель после оплаты.",
-    uz: "Siz «{course}» kursiga yozildingiz. O'qituvchi to'lovdan so'ng ruxsat beradi.",
-  },
 
   // --- pending actions ---
   linkInvalid: { ru: "Ссылка недействительна или устарела.", uz: "Havola yaroqsiz yoki eskirgan." },
@@ -174,6 +166,48 @@ const STRINGS = {
   notifyCourseInvite: {
     ru: "Вам открыт доступ к курсу. Присоединяйтесь к группе курса: {link}",
     uz: "Sizga kursga ruxsat berildi. Kurs guruhiga qo'shiling: {link}",
+  },
+
+  // --- enrolment: phone, application form, trial ---
+  applyAskPhone: {
+    ru:
+      "Чтобы записаться на курс «{course}», подтвердите номер телефона.\n\n" +
+      "Нажмите кнопку ниже — Telegram отправит номер, на который зарегистрирован ваш аккаунт.",
+    uz:
+      "«{course}» kursiga yozilish uchun telefon raqamingizni tasdiqlang.\n\n" +
+      "Quyidagi tugmani bosing — Telegram akkauntingiz ro'yxatdan o'tgan raqamni yuboradi.",
+  },
+  applySharePhoneButton: { ru: "📱 Отправить мой номер", uz: "📱 Raqamimni yuborish" },
+  applyPhoneNotOwn: {
+    ru: "Это чужой контакт. Нажмите кнопку «Отправить мой номер» — нужен номер вашего аккаунта.",
+    uz: "Bu boshqa odamning kontakti. «Raqamimni yuborish» tugmasini bosing — o'z raqamingiz kerak.",
+  },
+  applyPhoneSaved: {
+    ru: "Номер сохранён ✅\n\nТеперь заполните короткую анкету — нажмите кнопку ниже.",
+    uz: "Raqam saqlandi ✅\n\nEndi qisqa anketani to'ldiring — quyidagi tugmani bosing.",
+  },
+  applyOpenFormButton: { ru: "📝 Заполнить анкету", uz: "📝 Anketani to'ldirish" },
+  applyNoPendingCourse: {
+    ru: "Спасибо! Но я не знаю, на какой курс вы записываетесь — откройте ссылку курса ещё раз.",
+    uz: "Rahmat! Lekin qaysi kursga yozilayotganingizni bilmayman — kurs havolasini qayta oching.",
+  },
+  applyBlacklisted: {
+    ru: "Запись на курс «{course}» для вас закрыта. Обратитесь к преподавателю.",
+    uz: "«{course}» kursiga yozilish siz uchun yopiq. O'qituvchi bilan bog'laning.",
+  },
+  applyAlreadySubmitted: {
+    ru: "Вы уже подали анкету на курс «{course}».",
+    uz: "Siz «{course}» kursiga allaqachon anketa topshirgansiz.",
+  },
+  notifyTrialExpired: {
+    ru:
+      "🔔 У ученика #{student} закончился пробный период на курсе «{course}» — оплаты нет.\n" +
+      "Доступ в приложении приостановлен, из группы НЕ удалён. " +
+      "Отчислить можно в разделе «Отчисление».",
+    uz:
+      "🔔 #{student} o'quvchining «{course}» kursidagi sinov muddati tugadi — to'lov yo'q.\n" +
+      "Ilovadagi ruxsat to'xtatildi, guruhdan O'CHIRILMADI. " +
+      "«Chiqarish» bo'limida chiqarish mumkin.",
   },
 } satisfies Record<string, Entry>;
 

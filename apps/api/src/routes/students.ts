@@ -1,9 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
-import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/client.js";
 import {
   courseAccess,
+  courseApplications,
   courseBlacklist,
   courseDisciplinaryEvents,
   coursePenaltyPoints,
@@ -28,6 +29,10 @@ async function getStudentTelegramId(studentId: number): Promise<number | null> {
 const grantAccessSchema = z.object({ expires_at: z.coerce.date() });
 
 const blacklistSchema = z.object({ reason: z.string().min(1).optional() });
+
+const removalSchema = z.object({
+  student_ids: z.array(z.number().int().positive()).min(1).max(200),
+});
 
 const studentRoutes: FastifyPluginAsync = async (app) => {
   app.get("/courses/:courseId/students", async (request) => {
@@ -89,8 +94,134 @@ const studentRoutes: FastifyPluginAsync = async (app) => {
       revoked: r.access.revoked,
       penalty_points: r.points ?? 0,
       is_blacklisted: r.blacklisted ?? false,
+      is_trial: r.access.isTrial,
+      is_frozen: r.access.isFrozen,
+      frozen_at: r.access.frozenAt,
+      removed_from_group_at: r.access.removedFromGroupAt,
       progress_summary: { homework_total: homeworkTotal, homework_passed: passedByStudent.get(r.student.id) ?? 0 },
     }));
+  });
+
+  /** The enrolment questionnaire — 404 if this student never filled one. */
+  app.get("/courses/:courseId/students/:studentId/application", async (request) => {
+    const auth = requireAuth(request);
+    const params = request.params as { courseId: string; studentId: string };
+    const courseId = Number(params.courseId);
+    const studentId = Number(params.studentId);
+    await loadAccessibleCourse(auth, courseId);
+
+    const [row] = await db
+      .select()
+      .from(courseApplications)
+      .where(
+        and(
+          eq(courseApplications.courseId, courseId),
+          eq(courseApplications.studentId, studentId),
+        ),
+      )
+      .limit(1);
+    if (!row) throw NotFound("Application not found");
+
+    return {
+      full_name: row.fullName,
+      phone: row.phone,
+      parent_phone_primary: row.parentPhonePrimary,
+      parent_phone_secondary: row.parentPhoneSecondary,
+      about_self: row.aboutSelf,
+      submitted_at: row.submittedAt,
+    };
+  });
+
+  /**
+   * Students whose trial ran out without payment and who are still in the
+   * course group. Nothing here is removed automatically — this is the list
+   * the teacher works through, precisely so someone who asked for a few more
+   * days to pay can be left alone.
+   */
+  app.get("/courses/:courseId/removal-queue", async (request) => {
+    const auth = requireAuth(request);
+    const courseId = Number((request.params as { courseId: string }).courseId);
+    await loadAccessibleCourse(auth, courseId);
+
+    const rows = await db
+      .select({ access: courseAccess, student: students, application: courseApplications })
+      .from(courseAccess)
+      .innerJoin(students, eq(students.id, courseAccess.studentId))
+      .leftJoin(
+        courseApplications,
+        and(
+          eq(courseApplications.courseId, courseAccess.courseId),
+          eq(courseApplications.studentId, courseAccess.studentId),
+        ),
+      )
+      .where(
+        and(
+          eq(courseAccess.courseId, courseId),
+          eq(courseAccess.isFrozen, true),
+          isNull(courseAccess.removedFromGroupAt),
+        ),
+      )
+      .orderBy(desc(courseAccess.frozenAt));
+
+    return rows.map((r) => ({
+      student_id: r.student.id,
+      first_name: r.student.firstName,
+      telegram_username: r.student.telegramUsername,
+      full_name: r.application?.fullName ?? null,
+      phone: r.application?.phone ?? r.student.phone,
+      parent_phone_primary: r.application?.parentPhonePrimary ?? null,
+      frozen_at: r.access.frozenAt,
+      frozen_reason: r.access.frozenReason,
+    }));
+  });
+
+  /**
+   * Kicks the selected students out of the course's Telegram group. Reports
+   * per student rather than failing as a batch: a kick can legitimately fail
+   * (bot not an admin, student already left) and the teacher needs to know
+   * which ones actually went.
+   */
+  app.post("/courses/:courseId/removal-queue/remove", async (request) => {
+    const auth = requireAuth(request);
+    const courseId = Number((request.params as { courseId: string }).courseId);
+    await requireCourseCapability(auth, courseId, "canManageAccess");
+
+    const body = removalSchema.safeParse(request.body);
+    if (!body.success) throw Unprocessable(body.error.message);
+
+    const results: { student_id: number; removed: boolean; reason?: string }[] = [];
+    for (const studentId of body.data.student_ids) {
+      const [access] = await db
+        .select()
+        .from(courseAccess)
+        .where(and(eq(courseAccess.courseId, courseId), eq(courseAccess.studentId, studentId)))
+        .limit(1);
+      if (!access || !access.isFrozen) {
+        results.push({ student_id: studentId, removed: false, reason: "not_frozen" });
+        continue;
+      }
+
+      const telegramId = await getStudentTelegramId(studentId);
+      if (!telegramId) {
+        results.push({ student_id: studentId, removed: false, reason: "no_telegram_id" });
+        continue;
+      }
+
+      const removed = await removeStudentFromCourseGroup(courseId, telegramId);
+      if (removed) {
+        await db
+          .update(courseAccess)
+          .set({ removedFromGroupAt: new Date(), updatedAt: new Date() })
+          .where(eq(courseAccess.id, access.id));
+      }
+      results.push({
+        student_id: studentId,
+        removed,
+        ...(removed ? {} : { reason: "telegram_error" }),
+      });
+    }
+
+    return { results };
   });
 
   app.get("/students/:id", async (request) => {

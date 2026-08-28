@@ -5,6 +5,7 @@ import { runAccessExpirySweep } from "./accessExpirySweep.js";
 import { runHomeworkDeadlineReminder } from "./homeworkDeadlineReminder.js";
 import { runLiveLessonReminder } from "./liveLessonReminder.js";
 import { runUnreviewedHomeworkDigest } from "./unreviewedHomeworkDigest.js";
+import { runTrialExpirySweep } from "./trialExpirySweep.js";
 
 // Handles to every scheduled task, so a graceful shutdown (see index.ts) can
 // stop them before closing the DB pool — otherwise a job firing mid-shutdown
@@ -41,6 +42,7 @@ export function startJobs(log: FastifyBaseLogger) {
   scheduleJob(log, "homework-deadline-reminder", "*/30 * * * *", runHomeworkDeadlineReminder);
   scheduleJob(log, "live-lesson-reminder", "*/5 * * * *", runLiveLessonReminder);
   scheduleJob(log, "unreviewed-homework-digest", "0 9 * * *", runUnreviewedHomeworkDigest);
+  scheduleJob(log, "trial-expiry-sweep", "10 * * * *", runTrialExpirySweep);
 }
 
 /**

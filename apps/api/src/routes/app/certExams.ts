@@ -13,7 +13,7 @@ import {
   courses,
 } from "../../db/schema.js";
 import { requireStudentAuth } from "../../plugins/studentAuth.js";
-import { loadStudentAccessibleCourse } from "../../lib/studentAccess.js";
+import { assertNotFrozen, loadStudentAccessibleCourse } from "../../lib/studentAccess.js";
 import { createPendingActionDeepLink } from "../../telegram/pendingActions.js";
 import { fetchTelegramFile } from "../../telegram/client.js";
 import { bot } from "../../telegram/bot.js";
@@ -52,6 +52,17 @@ async function loadOwnAttempt(studentId: number, attemptId: number) {
     .limit(1);
   if (!attempt || attempt.studentId !== studentId) throw NotFound("Attempt not found");
   return attempt;
+}
+
+/**
+ * Freeze check for the two attempt endpoints that change something. Kept out
+ * of loadOwnAttempt on purpose: the GET attempt route shares that helper, and
+ * a frozen student is still allowed to look at their own work.
+ */
+async function assertAttemptNotFrozen(studentId: number, examId: number) {
+  const [exam] = await db.select().from(certExams).where(eq(certExams.id, examId)).limit(1);
+  if (!exam) throw NotFound("Exam not found");
+  await assertNotFrozen(studentId, exam.courseId);
 }
 
 /** The exam as a student may see it — never includes the answer key. */
@@ -127,6 +138,7 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
     const [exam] = await db.select().from(certExams).where(eq(certExams.id, examId)).limit(1);
     if (!exam || exam.publishedAt === null) throw NotFound("Exam not found");
     await loadStudentAccessibleCourse(auth.studentId, exam.courseId);
+    await assertNotFrozen(auth.studentId, exam.courseId);
 
     const attempts = await db
       .select()
@@ -352,6 +364,7 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
     const auth = requireStudentAuth(request);
     const params = request.params as { id: string; task: string };
     const attempt = await loadOwnAttempt(auth.studentId, Number(params.id));
+    await assertAttemptNotFrozen(auth.studentId, attempt.examId);
     const taskNumber = Number(params.task);
 
     if (!isValidTaskNumber(taskNumber) || isClosedTask(taskNumber)) {
@@ -370,6 +383,7 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
   app.post("/app/cert-exam-attempts/:id/submit", async (request) => {
     const auth = requireStudentAuth(request);
     const attempt = await loadOwnAttempt(auth.studentId, Number((request.params as { id: string }).id));
+    await assertAttemptNotFrozen(auth.studentId, attempt.examId);
     if (attempt.status !== "in_progress") throw Conflict("Attempt already submitted");
 
     const [exam] = await db

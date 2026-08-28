@@ -1,13 +1,15 @@
-import type { Context } from "grammy";
+import { InlineKeyboard, Keyboard, type Context } from "grammy";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
+import { randomBytes } from "node:crypto";
 import {
   botPendingActions,
+  courseApplications,
+  courseBlacklist,
   certExamAnswers,
   certExamAttempts,
   certExamItems,
   certExams,
-  courseAccess,
   courseTelegramGroups,
   courses,
   homeworkSubmissions,
@@ -24,6 +26,7 @@ import { isClosedTask } from "../lib/certExam.js";
 import { languageForTelegramUser } from "../lib/language.js";
 import { config } from "../config.js";
 import { bot } from "./bot.js";
+import { inviteStudentToCourseGroup } from "./groupMembership.js";
 
 function isOwner(telegramId: number): boolean {
   return config.OWNER_TELEGRAM_ID !== undefined && telegramId === config.OWNER_TELEGRAM_ID;
@@ -57,6 +60,13 @@ bot.command("start", async (ctx) => {
   await claimPendingAction(ctx, telegramId, payload, lang);
 });
 
+/**
+ * Enrolment, step 1 of 3. Opening a course link no longer enrols anyone
+ * outright: the student first confirms the phone number their Telegram
+ * account is registered with, then fills the questionnaire in the Mini App,
+ * and only submitting that grants trial access and sends the group invite
+ * (see routes/app/applications.ts).
+ */
 async function handleStudentCourseStart(
   ctx: Context,
   telegramId: number,
@@ -64,7 +74,7 @@ async function handleStudentCourseStart(
   lang: Language,
 ) {
   const [course] = await db.select().from(courses).where(eq(courses.id, courseId)).limit(1);
-  if (!course) {
+  if (!course || course.isArchived) {
     await ctx.reply(t(lang, "courseNotFound"));
     return;
   }
@@ -82,25 +92,157 @@ async function handleStudentCourseStart(
       .returning();
   }
 
-  const [existing] = await db
-    .select()
-    .from(courseAccess)
-    .where(and(eq(courseAccess.courseId, courseId), eq(courseAccess.studentId, student.id)))
+  // Same rule the API enforces (routes/app/applications.ts): a blacklisted
+  // student must not get the form, and above all must not be re-sent the
+  // group invite below.
+  const [blacklist] = await db
+    .select({ isBlacklisted: courseBlacklist.isBlacklisted })
+    .from(courseBlacklist)
+    .where(
+      and(eq(courseBlacklist.courseId, courseId), eq(courseBlacklist.studentId, student.id)),
+    )
     .limit(1);
-
-  if (existing) {
-    await ctx.reply(t(lang, "alreadyEnrolled", { course: course.title }));
+  if (blacklist?.isBlacklisted) {
+    await ctx.reply(t(lang, "applyBlacklisted", { course: course.title }));
     return;
   }
 
-  await db.insert(courseAccess).values({
-    courseId,
-    studentId: student.id,
-    teacherId: course.teacherId,
-    accessGranted: false, // pending — teacher grants access manually after payment
+  const [application] = await db
+    .select({ id: courseApplications.id })
+    .from(courseApplications)
+    .where(
+      and(eq(courseApplications.courseId, courseId), eq(courseApplications.studentId, student.id)),
+    )
+    .limit(1);
+  if (application) {
+    // Already enrolled — resend the group link rather than the form, since
+    // losing the invite message is the likeliest reason to reopen the link.
+    await ctx.reply(t(lang, "applyAlreadySubmitted", { course: course.title }));
+    await inviteStudentToCourseGroup(courseId, telegramId, student.id);
+    return;
+  }
+
+  if (student.phone) {
+    await sendApplicationFormButton(ctx, courseId, course.title, lang);
+    return;
+  }
+
+  await rememberApplicationIntent(telegramId, courseId);
+  await ctx.reply(t(lang, "applyAskPhone", { course: course.title }), {
+    reply_markup: new Keyboard()
+      .requestContact(t(lang, "applySharePhoneButton"))
+      .resized()
+      .oneTime(),
   });
-  await ctx.reply(t(lang, "enrolled", { course: course.title }));
 }
+
+/**
+ * Which course the student is applying to, remembered between the "share your
+ * phone" prompt and the contact actually arriving. Reuses bot_pending_actions
+ * (already the place bot-side conversation state lives) instead of adding a
+ * second state store — the row is created pre-claimed because the deep-link
+ * phase does not apply here.
+ */
+async function rememberApplicationIntent(telegramId: number, courseId: number) {
+  const now = new Date();
+  await db
+    .update(botPendingActions)
+    .set({ consumedAt: now })
+    .where(
+      and(
+        eq(botPendingActions.telegramId, telegramId),
+        eq(botPendingActions.actionType, "course_application"),
+        isNull(botPendingActions.consumedAt),
+      ),
+    );
+  await db.insert(botPendingActions).values({
+    token: randomBytes(16).toString("hex"),
+    telegramId,
+    actionType: "course_application",
+    targetCourseId: courseId,
+    claimedAt: now,
+    expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+  });
+}
+
+async function sendApplicationFormButton(
+  ctx: Context,
+  courseId: number,
+  courseTitle: string,
+  lang: Language,
+) {
+  await ctx.reply(t(lang, "applyPhoneSaved"), {
+    reply_markup: { remove_keyboard: true },
+  });
+  await ctx.reply(courseTitle, {
+    reply_markup: new InlineKeyboard().webApp(
+      t(lang, "applyOpenFormButton"),
+      `${config.MINIAPP_URL}/apply/${courseId}`,
+    ),
+  });
+}
+
+/**
+ * Enrolment, step 2 of 3 — the shared contact.
+ *
+ * Only a contact the sender shared about themselves is accepted: Telegram
+ * sets contact.user_id to the owner of the number, so a forwarded contact
+ * card (someone else's number, or a made-up one) fails this check. That is
+ * the whole point of asking via a request_contact button instead of a typed
+ * field.
+ */
+bot.on("message:contact", async (ctx) => {
+  const telegramId = ctx.from?.id;
+  if (!telegramId) return;
+  const lang = await languageForTelegramUser(telegramId);
+  const contact = ctx.message.contact;
+
+  if (contact.user_id !== telegramId) {
+    await ctx.reply(t(lang, "applyPhoneNotOwn"));
+    return;
+  }
+
+  const now = new Date();
+  await db
+    .update(students)
+    .set({ phone: contact.phone_number, phoneVerifiedAt: now, updatedAt: now })
+    .where(eq(students.telegramId, telegramId));
+
+  const [pending] = await db
+    .select()
+    .from(botPendingActions)
+    .where(
+      and(
+        eq(botPendingActions.telegramId, telegramId),
+        eq(botPendingActions.actionType, "course_application"),
+        isNull(botPendingActions.consumedAt),
+      ),
+    )
+    .orderBy(desc(botPendingActions.createdAt))
+    .limit(1);
+
+  if (!pending?.targetCourseId) {
+    await ctx.reply(t(lang, "applyNoPendingCourse"), { reply_markup: { remove_keyboard: true } });
+    return;
+  }
+
+  const [course] = await db
+    .select()
+    .from(courses)
+    .where(eq(courses.id, pending.targetCourseId))
+    .limit(1);
+  if (!course) {
+    await ctx.reply(t(lang, "courseNotFound"), { reply_markup: { remove_keyboard: true } });
+    return;
+  }
+
+  await db
+    .update(botPendingActions)
+    .set({ consumedAt: now })
+    .where(eq(botPendingActions.id, pending.id));
+
+  await sendApplicationFormButton(ctx, course.id, course.title, lang);
+});
 
 async function claimPendingAction(
   ctx: Context,

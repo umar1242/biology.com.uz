@@ -19,6 +19,10 @@ const envSchema = z.object({
   // Printed in the bot's "teacher created" reply so a new teacher knows where
   // to log in; was hardcoded to the production host inside the handler.
   DASHBOARD_URL: z.string().default("https://admin.biolog.com.uz"),
+  // Public https origin of the Mini App. Telegram only accepts https for
+  // web_app buttons, so this is what the enrolment questionnaire button
+  // points at (see telegram/handlers.ts).
+  MINIAPP_URL: z.string().default("https://app.biolog.com.uz"),
 });
 
 const parsed = envSchema.safeParse(process.env);
