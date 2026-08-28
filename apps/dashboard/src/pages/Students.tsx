@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RotateCcw, ShieldOff, ShieldPlus, UserPlus, UserX } from "lucide-react";
+import { FileText, RotateCcw, ShieldOff, ShieldPlus, UserPlus, UserX } from "lucide-react";
 import { TopBar } from "../components/TopBar";
 import { apiFetch, ApiError } from "../lib/api";
-import type { Course, RosterStudent } from "../lib/types";
+import type { Course, RosterStudent, StudentApplication } from "../lib/types";
 import { useI18n, type StringKey } from "../lib/i18n";
 
 function accessLabel(s: RosterStudent): { key: StringKey; className: string } {
@@ -18,6 +18,83 @@ function accessLabel(s: RosterStudent): { key: StringKey; className: string } {
 function toDateInputValue(iso: string | null): string {
   const d = iso ? new Date(iso) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The enrolment questionnaire, collapsed by default: it is reference data the
+ * teacher looks up occasionally (to phone a parent), not something worth
+ * fetching for every row of a long roster.
+ */
+function ApplicationBlock({ courseId, studentId }: { courseId: number; studentId: number }) {
+  const { t, formatDate } = useI18n();
+  const [open, setOpen] = useState(false);
+
+  const application = useQuery({
+    queryKey: ["application", courseId, studentId],
+    queryFn: () =>
+      apiFetch<StudentApplication | null>(
+        `/courses/${courseId}/students/${studentId}/application`,
+      ).catch((err) => {
+        // A student enrolled before the questionnaire existed simply has none.
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }),
+    enabled: open,
+  });
+
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-ink"
+      >
+        <FileText size={13} /> {open ? t("applicationHide") : t("applicationShow")}
+      </button>
+
+      {open && (
+        <div className="mt-2 rounded-xl border border-line bg-inset p-3.5 text-xs">
+          {application.isLoading && <p className="text-muted">{t("loading")}</p>}
+          {!application.isLoading && !application.data && (
+            <p className="text-muted">{t("applicationNone")}</p>
+          )}
+          {application.data && (
+            <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Field label={t("applicationFullName")} value={application.data.full_name} />
+              <Field label={t("applicationPhone")} value={application.data.phone} />
+              <Field
+                label={t("applicationParentPhone")}
+                value={application.data.parent_phone_primary}
+              />
+              <Field
+                label={t("applicationParentPhone2")}
+                value={application.data.parent_phone_secondary}
+              />
+              {application.data.about_self && (
+                <div className="sm:col-span-2">
+                  <dt className="text-muted">{t("applicationAbout")}</dt>
+                  <dd className="whitespace-pre-line text-ink">{application.data.about_self}</dd>
+                </div>
+              )}
+              <Field
+                label={t("applicationSubmitted")}
+                value={formatDate(application.data.submitted_at)}
+              />
+            </dl>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <dt className="text-muted">{label}</dt>
+      <dd className="font-medium text-ink">{value || "—"}</dd>
+    </div>
+  );
 }
 
 function StudentCard({ student, courseId }: { student: RosterStudent; courseId: number }) {
@@ -100,6 +177,16 @@ function StudentCard({ student, courseId }: { student: RosterStudent; courseId: 
         </div>
         <div className="flex items-center gap-2">
           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${label.className}`}>{t(label.key)}</span>
+          {student.is_trial && !student.is_frozen && (
+            <span className="rounded-full bg-inset px-2.5 py-1 text-xs font-medium text-muted">
+              {t("badgeTrial")}
+            </span>
+          )}
+          {student.is_frozen && (
+            <span className="rounded-full bg-warn-soft px-2.5 py-1 text-xs font-medium text-warn">
+              {t("badgeFrozen")}
+            </span>
+          )}
           {student.is_blacklisted && (
             <span className="rounded-full bg-neg-soft px-2.5 py-1 text-xs font-medium text-neg">
               {t("blacklisted")}
@@ -128,6 +215,8 @@ function StudentCard({ student, courseId }: { student: RosterStudent; courseId: 
           </p>
         </div>
       </div>
+
+      <ApplicationBlock courseId={courseId} studentId={student.student_id} />
 
       <div className="flex flex-wrap items-center gap-2">
         {!showExpiryInput ? (

@@ -12,6 +12,7 @@ import { CertAttemptPage } from "./pages/CertAttempt";
 import { ItemBankPage } from "./pages/ItemBank";
 import { ItemCardPage } from "./pages/ItemCard";
 import { StudentsPage } from "./pages/Students";
+import { RemovalPage } from "./pages/Removal";
 import { AssistantsPage } from "./pages/Assistants";
 import { SettingsPage } from "./pages/Settings";
 import { Layout } from "./components/Layout";
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/bank" element={<ItemBankPage />} />
           <Route path="/bank/:id" element={<ItemCardPage />} />
           <Route path="/students" element={<StudentsPage />} />
+          <Route path="/removal" element={<RemovalPage />} />
           <Route path="/assistants" element={<AssistantsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

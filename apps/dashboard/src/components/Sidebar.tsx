@@ -6,6 +6,7 @@ import {
   GraduationCap,
   Library,
   Users,
+  UserMinus,
   UserCog,
   Settings,
   HelpCircle,
@@ -22,6 +23,7 @@ const navItems: { to: string; labelKey: StringKey; icon: typeof BookOpen; end?: 
   { to: "/cert", labelKey: "navCert", icon: GraduationCap },
   { to: "/bank", labelKey: "navBank", icon: Library },
   { to: "/students", labelKey: "navStudents", icon: Users },
+  { to: "/removal", labelKey: "navRemoval", icon: UserMinus },
   { to: "/assistants", labelKey: "navAssistants", icon: UserCog },
   { to: "/settings", labelKey: "navSettings", icon: Settings },
 ];

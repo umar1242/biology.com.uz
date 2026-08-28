@@ -46,7 +46,31 @@ export type RosterStudent = {
   revoked: boolean;
   penalty_points: number;
   is_blacklisted: boolean;
+  is_trial: boolean;
+  is_frozen: boolean;
+  frozen_at: string | null;
+  removed_from_group_at: string | null;
   progress_summary: { homework_total: number; homework_passed: number };
+};
+
+export type StudentApplication = {
+  full_name: string;
+  phone: string;
+  parent_phone_primary: string;
+  parent_phone_secondary: string | null;
+  about_self: string | null;
+  submitted_at: string;
+};
+
+export type RemovalQueueItem = {
+  student_id: number;
+  first_name: string;
+  telegram_username: string | null;
+  full_name: string | null;
+  phone: string | null;
+  parent_phone_primary: string | null;
+  frozen_at: string | null;
+  frozen_reason: string | null;
 };
 
 export type Assistant = {

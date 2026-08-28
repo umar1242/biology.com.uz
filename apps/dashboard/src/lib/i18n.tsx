@@ -30,6 +30,7 @@ const STRINGS = {
   navCert: { ru: "Сертификат", uz: "Sertifikat" },
   navBank: { ru: "Банк заданий", uz: "Topshiriqlar banki" },
   navStudents: { ru: "Ученики", uz: "O'quvchilar" },
+  navRemoval: { ru: "Отчисление", uz: "Chiqarish" },
   navAssistants: { ru: "Помощники", uz: "Yordamchilar" },
   navSettings: { ru: "Настройки", uz: "Sozlamalar" },
   // --- certificate exam ---
@@ -424,6 +425,40 @@ const STRINGS = {
   accessExpired: { ru: "Истёк", uz: "Muddati tugagan" },
   accessRevoked: { ru: "Отозван", uz: "Bekor qilingan" },
   blacklisted: { ru: "Заблокирован", uz: "Bloklangan" },
+  badgeTrial: { ru: "Пробный", uz: "Sinov" },
+  badgeFrozen: { ru: "Заморожен", uz: "Muzlatilgan" },
+
+  // enrolment questionnaire
+  application: { ru: "Анкета", uz: "Anketa" },
+  applicationNone: { ru: "Анкета не заполнялась", uz: "Anketa to'ldirilmagan" },
+  applicationFullName: { ru: "ФИО", uz: "F.I.Sh." },
+  applicationPhone: { ru: "Телефон ученика", uz: "O'quvchi telefoni" },
+  applicationParentPhone: { ru: "Телефон родителя", uz: "Ota-ona telefoni" },
+  applicationParentPhone2: { ru: "Второй телефон родителя", uz: "Ikkinchi ota-ona telefoni" },
+  applicationAbout: { ru: "О себе", uz: "O'zi haqida" },
+  applicationSubmitted: { ru: "Подана", uz: "Topshirilgan" },
+  applicationShow: { ru: "Показать анкету", uz: "Anketani ko'rsatish" },
+  applicationHide: { ru: "Скрыть анкету", uz: "Anketani yashirish" },
+
+  // removal queue
+  removalTitle: { ru: "Отчисление", uz: "Chiqarish" },
+  removalIntro: {
+    ru: "Ученики, у которых закончился пробный период без оплаты. Из группы никто не удалён автоматически — решаете вы.",
+    uz: "Sinov muddati to'lovsiz tugagan o'quvchilar. Hech kim guruhdan avtomatik o'chirilmagan — qaror sizniki.",
+  },
+  removalEmpty: { ru: "Никого отчислять не нужно.", uz: "Hech kimni chiqarish kerak emas." },
+  removalFrozenAt: { ru: "Заморожен", uz: "Muzlatilgan" },
+  removalSelectAll: { ru: "Выбрать всех", uz: "Hammasini tanlash" },
+  removalClearAll: { ru: "Снять выделение", uz: "Belgilashni olib tashlash" },
+  removalSelected: { ru: "Выбрано: {count}", uz: "Tanlangan: {count}" },
+  removalButton: { ru: "Удалить из группы", uz: "Guruhdan o'chirish" },
+  removalConfirm: {
+    ru: "Удалить выбранных учеников из группы курса? Вернуть их можно будет только новым приглашением.",
+    uz: "Tanlangan o'quvchilar kurs guruhidan o'chirilsinmi? Ularni faqat yangi taklif bilan qaytarish mumkin.",
+  },
+  removalDone: { ru: "Удалено: {ok} из {total}", uz: "O'chirildi: {total} dan {ok}" },
+  removalFailedRow: { ru: "не удалось", uz: "bo'lmadi" },
+  removalPending: { ru: "Удаляем…", uz: "O'chirilmoqda…" },
   grantAccess: { ru: "Выдать доступ", uz: "Ruxsat berish" },
   extendAccess: { ru: "Продлить", uz: "Uzaytirish" },
   revokeAccess: { ru: "Отозвать", uz: "Bekor qilish" },
