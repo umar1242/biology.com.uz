@@ -1,10 +1,10 @@
 import { NavLink } from "react-router-dom";
-import { Home, BookOpen, ClipboardList, GraduationCap, User } from "lucide-react";
+import { Home, LibraryBig, ClipboardList, GraduationCap, User } from "lucide-react";
 import { useI18n, type StringKey } from "../lib/i18n";
 
 const tabs: { to: string; icon: typeof Home; labelKey: StringKey; end: boolean }[] = [
   { to: "/", icon: Home, labelKey: "tabHome", end: true },
-  { to: "/courses", icon: BookOpen, labelKey: "tabCourses", end: false },
+  { to: "/courses", icon: LibraryBig, labelKey: "lessons", end: false },
   { to: "/homework", icon: ClipboardList, labelKey: "tabHomework", end: false },
   { to: "/cert", icon: GraduationCap, labelKey: "tabCert", end: false },
   { to: "/profile", icon: User, labelKey: "tabProfile", end: false },

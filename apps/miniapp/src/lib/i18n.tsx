@@ -28,7 +28,6 @@ const STRINGS = {
 
   // tabs
   tabHome: { ru: "Главная", uz: "Bosh sahifa" },
-  tabCourses: { ru: "Курсы", uz: "Kurslar" },
   tabHomework: { ru: "Задания", uz: "Vazifalar" },
   tabCert: { ru: "Сертификат", uz: "Sertifikat" },
   certListTitle: { ru: "Сертификатный экзамен", uz: "Sertifikat imtihoni" },
@@ -87,6 +86,12 @@ const STRINGS = {
   modules: { ru: "Модули", uz: "Modullar" },
   noModulesYet: { ru: "Модулей пока нет.", uz: "Hozircha modullar yo'q." },
   lessons: { ru: "Уроки", uz: "Darslar" },
+  lessonColNum: { ru: "№", uz: "№" },
+  lessonColTitle: { ru: "Урок", uz: "Dars" },
+  lessonColDate: { ru: "Дата", uz: "Sana" },
+  lessonColType: { ru: "Тип", uz: "Turi" },
+  lessonTypeLiveShort: { ru: "Live", uz: "Live" },
+  lessonTypeRecordedShort: { ru: "Запись", uz: "Yozuv" },
   noLessonsYet: { ru: "Уроков пока нет.", uz: "Hozircha darslar yo'q." },
   lessonNotFound: { ru: "Урок не найден", uz: "Dars topilmadi" },
   lessonLive: { ru: "Live-урок", uz: "Jonli dars" },

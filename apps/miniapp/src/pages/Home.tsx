@@ -115,7 +115,7 @@ export function HomePage() {
             onClick={() => navigate("/courses")}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-line py-2.5 text-[13px] font-semibold text-ink"
           >
-            {t("tabCourses")} <BookOpen size={14} />
+            {t("lessons")} <BookOpen size={14} />
           </button>
           <button
             type="button"
