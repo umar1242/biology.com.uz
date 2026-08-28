@@ -49,6 +49,7 @@ export const disciplinaryEventTypeEnum = pgEnum("disciplinary_event_type", [
   "auto_blacklist",
   "manual_blacklist",
   "manual_blacklist_clear",
+  "trial_expired_freeze",
 ]);
 export const certExamAttemptStatusEnum = pgEnum("cert_exam_attempt_status", [
   "in_progress",
@@ -71,6 +72,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "access_expired",
   "blacklist_event",
   "unreviewed_homework_summary",
+  "trial_expired",
 ]);
 export const botPendingActionTypeEnum = pgEnum("bot_pending_action_type", [
   "attach_lesson_recording",
@@ -80,6 +82,7 @@ export const botPendingActionTypeEnum = pgEnum("bot_pending_action_type", [
   "attach_review_voice",
   "attach_cert_variant",
   "submit_cert_task",
+  "course_application",
 ]);
 
 // ---------------------------------------------------------------------
@@ -138,6 +141,11 @@ export const students = pgTable("students", {
   telegramUsername: text("telegram_username"),
   firstName: text("first_name").notNull(),
   lastName: text("last_name"),
+  // Only ever written from a Telegram `contact` the student shared about
+  // themselves — that is the number the account is registered with, which a
+  // hand-typed field could not guarantee. See telegram/handlers.ts.
+  phone: text("phone"),
+  phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true }),
   language: languageEnum("language").notNull().default("ru"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -157,11 +165,17 @@ export const courses = pgTable(
     title: text("title").notNull(),
     description: text("description"),
     subject: courseSubjectEnum("subject").notNull(),
+    // How many published lessons a new student gets for free before the
+    // trial-expiry sweep freezes them (jobs/trialExpirySweep.ts).
+    trialLessonCount: integer("trial_lesson_count").notNull().default(2),
     isArchived: boolean("is_archived").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("idx_courses_teacher").on(table.teacherId)],
+  (table) => [
+    index("idx_courses_teacher").on(table.teacherId),
+    check("trial_lesson_count_nonnegative", sql`${table.trialLessonCount} >= 0`),
+  ],
 );
 
 export const assistantCoursePermissions = pgTable(
@@ -386,6 +400,25 @@ export const courseAccess = pgTable(
     revoked: boolean("revoked").notNull().default(false),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     revokedBy: bigint("revoked_by", { mode: "number" }).references(() => staffUsers.id),
+
+    // Trial: granted immediately when the application form is submitted, and
+    // bounded by a lesson count rather than a date — trialStartedAt is the
+    // point lessons are counted from (jobs/trialExpirySweep.ts).
+    isTrial: boolean("is_trial").notNull().default(false),
+    trialStartedAt: timestamp("trial_started_at", { withTimezone: true }),
+
+    // Frozen = still enrolled and can still see everything, but cannot act:
+    // no lesson video to chat, no homework submission, no cert exam. Kept
+    // separate from `revoked` (teacher cut them off) and from the blacklist
+    // (discipline) — this one is specifically about unpaid tuition.
+    isFrozen: boolean("is_frozen").notNull().default(false),
+    frozenAt: timestamp("frozen_at", { withTimezone: true }),
+    frozenReason: text("frozen_reason"),
+
+    // Set when staff actually kicks them from the course group via the
+    // dashboard's removal queue — never automatically.
+    removedFromGroupAt: timestamp("removed_from_group_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -395,10 +428,51 @@ export const courseAccess = pgTable(
     index("idx_course_access_expiry_watch")
       .on(table.expiresAt)
       .where(sql`${table.accessGranted} = true AND ${table.revoked} = false`),
+    // Trial access is deliberately open-ended in time — it ends when the
+    // course publishes its (trialLessonCount + 1)-th lesson, not on a date,
+    // so it is the one granted state allowed to have no expiresAt.
     check(
       "expiry_required_when_granted",
-      sql`${table.accessGranted} = false OR ${table.expiresAt} IS NOT NULL`,
+      sql`${table.accessGranted} = false OR ${table.expiresAt} IS NOT NULL OR ${table.isTrial} = true`,
     ),
+    index("idx_course_access_trial_watch")
+      .on(table.courseId)
+      .where(sql`${table.isTrial} = true AND ${table.isFrozen} = false AND ${table.revoked} = false`),
+  ],
+);
+
+/**
+ * The enrolment questionnaire a student fills in the Mini App before joining
+ * a course. One per (course, student): resubmitting is refused rather than
+ * silently overwriting, since submitting is what grants the trial and sends
+ * the group invite.
+ */
+export const courseApplications = pgTable(
+  "course_applications",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    courseId: bigint("course_id", { mode: "number" })
+      .notNull()
+      .references(() => courses.id),
+    studentId: bigint("student_id", { mode: "number" })
+      .notNull()
+      .references(() => students.id),
+    fullName: text("full_name").notNull(),
+    // Snapshot of the Telegram-verified number at submission time — students
+    // may later change their Telegram phone, but the application should keep
+    // the number the teacher was actually given.
+    phone: text("phone").notNull(),
+    parentPhonePrimary: text("parent_phone_primary").notNull(),
+    parentPhoneSecondary: text("parent_phone_secondary"),
+    aboutSelf: text("about_self"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("course_applications_course_id_student_id_key").on(
+      table.courseId,
+      table.studentId,
+    ),
+    index("idx_course_applications_course").on(table.courseId),
   ],
 );
 
