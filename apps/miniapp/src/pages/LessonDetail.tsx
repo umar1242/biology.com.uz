@@ -3,7 +3,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, PlayCircle } from "lucide-react";
 import { NotFound } from "../components/NotFound";
-import { apiFetch, ApiError } from "../lib/api";
+import { apiFetch } from "../lib/api";
+import { errorText } from "../lib/errorText";
 import type { LessonDetail } from "../lib/types";
 import { useI18n } from "../lib/i18n";
 
@@ -21,7 +22,7 @@ export function LessonDetailPage() {
   const requestVideo = useMutation({
     mutationFn: () => apiFetch<{ status: string }>(`/app/lessons/${id}/request-video`, { method: "POST" }),
     onSuccess: () => setMessage(t("videoSentToChat")),
-    onError: (err) => setMessage(err instanceof ApiError ? err.message : t("videoSendFailed")),
+    onError: (err) => setMessage(errorText(err, t("frozenText"), t("videoSendFailed"))),
   });
 
   if (lesson.isLoading) return <div className="px-5 pt-6 text-sm text-muted">{t("loading")}</div>;

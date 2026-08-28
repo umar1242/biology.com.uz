@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Check } from "lucide-react";
 import { NotFound } from "../components/NotFound";
-import { apiFetch, ApiError } from "../lib/api";
+import { apiFetch } from "../lib/api";
+import { errorText } from "../lib/errorText";
 import { openBotChat } from "../lib/telegram";
 import type { HomeworkDetail, Submission } from "../lib/types";
 import { homeworkStatusLabel } from "../lib/statusLabels";
@@ -67,7 +68,7 @@ export function HomeworkDetailPage() {
       openBotChat(res.deep_link);
       setSent(true);
     },
-    onError: (err) => setError(err instanceof ApiError ? err.message : t("submitFailed")),
+    onError: (err) => setError(errorText(err, t("frozenText"), t("submitFailed"))),
   });
 
   if (detail.isLoading) return <div className="px-5 pt-6 text-sm text-muted">{t("loading")}</div>;

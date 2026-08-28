@@ -107,6 +107,84 @@ const STRINGS = {
   },
   videoSendFailed: { ru: "Не удалось отправить видео", uz: "Videoni yuborib bo'lmadi" },
 
+  // gate: no questionnaire filled yet
+  gateTitle: { ru: "Нужно заполнить анкету", uz: "Anketani to'ldirish kerak" },
+  gateText: {
+    ru: "Приложение откроется после того, как вы заполните анкету.",
+    uz: "Anketani to'ldirganingizdan keyin ilova ochiladi.",
+  },
+  gateFillButton: { ru: "Заполнить анкету", uz: "Anketani to'ldirish" },
+  gateNoCourse: {
+    ru: "Откройте ссылку на курс, которую дал преподаватель, — анкета откроется оттуда.",
+    uz: "O'qituvchi bergan kurs havolasini oching — anketa o'sha yerdan ochiladi.",
+  },
+
+  // application form (enrolment questionnaire)
+  applyTitle: { ru: "Запись на курс", uz: "Kursga yozilish" },
+  applyAboutCourse: { ru: "О курсе", uz: "Kurs haqida" },
+  applyNoDescription: {
+    ru: "Преподаватель пока не добавил описание курса.",
+    uz: "O'qituvchi hozircha kurs tavsifini qo'shmagan.",
+  },
+  applyTrialNote: {
+    ru: "Первые {count} урока — бесплатно. Дальше доступ продлевается после оплаты.",
+    uz: "Birinchi {count} dars — bepul. Keyin ruxsat to'lovdan so'ng davom etadi.",
+  },
+  applyContinue: { ru: "Ознакомился, продолжить", uz: "Tanishdim, davom etish" },
+  applyFormTitle: { ru: "Анкета", uz: "Anketa" },
+  applyFullName: { ru: "Фамилия Имя Отчество", uz: "Familiya Ism Sharif" },
+  applyFullNamePlaceholder: { ru: "Например: Иванов Иван Иванович", uz: "Masalan: Aliyev Ali Alievich" },
+  applyMyPhone: { ru: "Ваш телефон", uz: "Telefoningiz" },
+  applyPhoneVerified: { ru: "подтверждён в Telegram", uz: "Telegramda tasdiqlangan" },
+  applyParentPhone: { ru: "Телефон родителя", uz: "Ota-ona telefoni" },
+  applyParentPhoneSecond: { ru: "Второй телефон родителя", uz: "Ikkinchi ota-ona telefoni" },
+  applyRecommended: { ru: "рекомендуем", uz: "tavsiya etamiz" },
+  applyRequired: { ru: "обязательно", uz: "majburiy" },
+  applyAbout: { ru: "Коротко о себе", uz: "O'zingiz haqingizda qisqacha" },
+  applyAboutPlaceholder: {
+    ru: "Школа, класс, зачем идёте на курс",
+    uz: "Maktab, sinf, kursga nima uchun kelyapsiz",
+  },
+  applySubmit: { ru: "Отправить анкету", uz: "Anketani yuborish" },
+  applySubmitting: { ru: "Отправляем…", uz: "Yuborilmoqda…" },
+  applyDoneTitle: { ru: "Заявка принята", uz: "Ariza qabul qilindi" },
+  applyDoneText: {
+    ru: "Ссылка на группу курса отправлена вам в чат с ботом.",
+    uz: "Kurs guruhiga havola bot bilan chatingizga yuborildi.",
+  },
+  applyDoneNoInvite: {
+    ru: "Заявка сохранена, но ссылку на группу отправить не удалось — напишите преподавателю.",
+    uz: "Ariza saqlandi, lekin guruh havolasini yuborib bo'lmadi — o'qituvchiga yozing.",
+  },
+  applyAlready: {
+    ru: "Вы уже подали анкету на этот курс.",
+    uz: "Siz bu kursga allaqachon anketa topshirgansiz.",
+  },
+  applicationSubmittedAt: { ru: "Подана {date}", uz: "{date} da topshirilgan" },
+  myApplication: { ru: "Моя анкета", uz: "Mening anketam" },
+  myApplicationNone: { ru: "Анкета не заполнена", uz: "Anketa to'ldirilmagan" },
+  applicationEdit: { ru: "Редактировать", uz: "Tahrirlash" },
+  applicationSave: { ru: "Сохранить", uz: "Saqlash" },
+  applicationSaving: { ru: "Сохраняем…", uz: "Saqlanmoqda…" },
+  applicationSaved: { ru: "Сохранено ✅", uz: "Saqlandi ✅" },
+  applicationCancel: { ru: "Отмена", uz: "Bekor qilish" },
+  applyEnterApp: { ru: "Перейти в приложение", uz: "Ilovaga o'tish" },
+  applyBlocked: {
+    ru: "Запись на этот курс закрыта. Обратитесь к преподавателю.",
+    uz: "Bu kursga yozilish yopiq. O'qituvchi bilan bog'laning.",
+  },
+  applyErrName: { ru: "Укажите ФИО полностью", uz: "F.I.Sh. to'liq kiriting" },
+  applyErrPhone: { ru: "Проверьте номер телефона", uz: "Telefon raqamini tekshiring" },
+  applyErrParent: { ru: "Телефон родителя обязателен", uz: "Ota-ona telefoni majburiy" },
+  applyFailed: { ru: "Не удалось отправить анкету", uz: "Anketani yuborib bo'lmadi" },
+
+  // frozen access (trial over, unpaid)
+  frozenTitle: { ru: "Доступ приостановлен", uz: "Ruxsat to'xtatildi" },
+  frozenText: {
+    ru: "Пробный период закончился. Свяжитесь с преподавателем, чтобы продолжить.",
+    uz: "Sinov muddati tugadi. Davom etish uchun o'qituvchi bilan bog'laning.",
+  },
+
   // homework
   homework: { ru: "Задания", uz: "Vazifalar" },
   homeworkOne: { ru: "Задание", uz: "Vazifa" },

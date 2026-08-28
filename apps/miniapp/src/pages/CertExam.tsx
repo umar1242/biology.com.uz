@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Camera, Check, FileDown, Send } from "lucide-react";
-import { apiFetch, ApiError } from "../lib/api";
+import { apiFetch } from "../lib/api";
+import { errorText } from "../lib/errorText";
 import { closeMiniApp, openBotChat } from "../lib/telegram";
 import { useI18n } from "../lib/i18n";
 
@@ -66,7 +67,7 @@ export function CertExamPage() {
       queryClient.invalidateQueries({ queryKey: ["cert-exam", id] });
       queryClient.invalidateQueries({ queryKey: ["cert-exams"] });
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "error"),
+    onError: (e) => setError(errorText(e, t("frozenText"), t("applyFailed"))),
   });
 
   const attemptId = exam.data?.attempt_id ?? null;
@@ -99,7 +100,7 @@ export function CertExamPage() {
       setSavingState("saved");
       setTimeout(() => setSavingState("idle"), 1500);
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "error"),
+    onError: (e) => setError(errorText(e, t("frozenText"), t("applyFailed"))),
   });
 
   function pick(task: number, option: string) {
@@ -125,7 +126,7 @@ export function CertExamPage() {
         { method: "POST" },
       ),
     onSuccess: (res) => openBotChat(res.deep_link),
-    onError: (e) => setError(e instanceof ApiError ? e.message : "error"),
+    onError: (e) => setError(errorText(e, t("frozenText"), t("applyFailed"))),
   });
 
   const submit = useMutation({
@@ -136,7 +137,7 @@ export function CertExamPage() {
       queryClient.invalidateQueries({ queryKey: ["cert-exam", id] });
       queryClient.invalidateQueries({ queryKey: ["cert-exams"] });
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "error"),
+    onError: (e) => setError(errorText(e, t("frozenText"), t("applyFailed"))),
   });
 
   const a = attempt.data;
@@ -155,7 +156,7 @@ export function CertExamPage() {
       setFileSent(true);
       setTimeout(() => setFileSent(false), 6000);
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : "error"),
+    onError: (e) => setError(errorText(e, t("frozenText"), t("applyFailed"))),
   });
 
   return (

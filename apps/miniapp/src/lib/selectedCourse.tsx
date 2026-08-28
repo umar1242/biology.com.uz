@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "./api";
+import { useAuth } from "./auth";
 import type { Course } from "./types";
 
 const STORAGE_KEY = "selectedCourseId";
@@ -31,9 +32,13 @@ const SelectedCourseContext = createContext<Ctx | null>(null);
  * bleed into course Y's view.
  */
 export function SelectedCourseProvider({ children }: { children: ReactNode }) {
+  // Not fetched before the questionnaire is filled: the API gates every /app
+  // route behind it, so this would just be a guaranteed 403 on the apply page.
+  const { onboarded } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ["app-courses"],
     queryFn: () => apiFetch<Course[]>("/app/courses"),
+    enabled: onboarded,
   });
   const courses = data ?? [];
 

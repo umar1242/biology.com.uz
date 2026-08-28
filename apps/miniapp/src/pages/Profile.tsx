@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Moon, Smartphone, Sun } from "lucide-react";
 import { apiFetch } from "../lib/api";
-import type { Profile } from "../lib/types";
+import type { MyApplication, Profile } from "../lib/types";
+import { ApplicationCard } from "../components/ApplicationCard";
 import { accessStatusLabel } from "../lib/statusLabels";
 import { useTheme, type ThemeMode } from "../lib/theme";
 import { useI18n, type Language } from "../lib/i18n";
@@ -21,6 +22,10 @@ const LANGUAGES: { value: Language; label: string }[] = [
 
 export function ProfilePage() {
   const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<Profile>("/app/profile") });
+  const applications = useQuery({
+    queryKey: ["my-applications"],
+    queryFn: () => apiFetch<MyApplication[]>("/app/applications"),
+  });
   const { mode, setMode } = useTheme();
   const { t, lang, setLang } = useI18n();
 
@@ -73,6 +78,15 @@ export function ProfilePage() {
         ))}
       </div>
       <p className="mb-5 text-xs text-muted">{t("languageHint")}</p>
+
+      <p className="mb-3 text-sm font-semibold text-ink">{t("myApplication")}</p>
+      <div className="mb-5 flex flex-col gap-2">
+        {applications.isLoading && <p className="text-sm text-muted">{t("loading")}</p>}
+        {!applications.isLoading && applications.data?.length === 0 && (
+          <p className="text-sm text-muted">{t("myApplicationNone")}</p>
+        )}
+        {applications.data?.map((a) => <ApplicationCard key={a.id} application={a} />)}
+      </div>
 
       <p className="mb-3 text-sm font-semibold text-ink">{t("myCourses")}</p>
       <div className="flex flex-col gap-2">

@@ -80,3 +80,28 @@ export type Profile = {
     is_blacklisted: boolean;
   }[];
 };
+
+export type ApplicationContext = {
+  course: {
+    id: number;
+    title: string;
+    description: string | null;
+    subject: "biology" | "chemistry";
+    trial_lesson_count: number;
+  };
+  verified_phone: string | null;
+  full_name_suggestion: string;
+  already_submitted: boolean;
+};
+
+export type MyApplication = {
+  id: number;
+  course_id: number;
+  course_title: string;
+  full_name: string;
+  phone: string;
+  parent_phone_primary: string;
+  parent_phone_secondary: string | null;
+  about_self: string | null;
+  submitted_at: string;
+};
