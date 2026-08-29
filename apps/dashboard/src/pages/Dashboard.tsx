@@ -89,9 +89,15 @@ export function DashboardPage() {
       <main className="px-4 pb-10 sm:px-8">
         {/* Hero */}
         <div className="relative mb-6 overflow-hidden rounded-3xl border border-line bg-hero px-5 py-6 text-on-hero sm:px-8 sm:py-7">
+          {/* Два пятна палитры на чёрной плашке: фиолетовое и кислотно-жёлтое.
+              Плашка тёмная в обеих темах, поэтому жёлтый тут уместен. */}
           <div
             aria-hidden
-            className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full bg-accent/25 blur-3xl"
+            className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full bg-brand/40 blur-3xl"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-28 right-24 h-52 w-52 rounded-full bg-warn/15 blur-3xl"
           />
           <p className="relative text-xs font-medium tracking-wide text-hero-muted uppercase">
             {dateFormatter.format(new Date())}

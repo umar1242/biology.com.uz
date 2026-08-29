@@ -56,18 +56,20 @@
 
 :root {
   --app: #f2f0f0;
-  --card: #ffffff;
-  --inset: #f6f5f5;
+  --card: #fefffc;
+  --inset: #f5f6f0;
   --ink: #0d0d0d;
   --muted: #8c8c8c;
   --line: #e9e7e7;
-  --brand: #5b34e0;
-  --on-brand: #ffffff;
+  --brand: #8116e0;
+  --on-brand: #fefffc;
 
-  --accent: #5b34e0;
-  --accent-soft: #ece7fd;
-  --info: #0e7490;
-  --info-soft: #e0f2f7;
+  --accent: #8116e0;
+  --accent-soft: #f0e4fd;
+  /* Третий цвет палитры — белый. На светлом фоне он превращается в
+     нейтральный чернильный чип: своей краски у него тут быть не может. */
+  --info: #0d0d0d;
+  --info-soft: #eceee6;
 
   --hero: #0d0d0d;
   --on-hero: #ffffff;
@@ -78,33 +80,38 @@
   --nav-ink: #9a9a9a;
   --nav-active: #ffffff;
   --on-nav-active: #0d0d0d;
-  --nav-sel: #5b34e0;
+  --nav-sel: #8116e0;
   --on-nav-sel: #ffffff;
 
   --pos: #0e9f6e;
   --pos-soft: #e3f5ee;
   --neg: #e5484d;
   --neg-soft: #fdeaea;
-  --warn: #b45309;
-  --warn-soft: #fcf0dd;
+  /* Banana Yellow светится только на чёрном: у него яркость под 93%, и
+     текстом на белом фоне он нечитаем. Поэтому в светлой теме внимание —
+     тёмная олива, а сама краска остаётся заливкой. */
+  --warn: #55700a;
+  --warn-soft: #eefcbe;
 
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
   --app: #000000;
-  --card: #151515;
-  --inset: #1f1f1f;
-  --ink: #ffffff;
+  --card: #131313;
+  --inset: #1e1e1e;
+  --ink: #fefffc;
   --muted: #8c8c8c;
   --line: #262626;
-  --brand: #7c5cff;
-  --on-brand: #ffffff;
+  --brand: #8116e0;
+  --on-brand: #fefffc;
 
-  --accent: #8b6cff;
-  --accent-soft: #1e1738;
-  --info: #38bdf8;
-  --info-soft: #0d2432;
+  /* Сам Plum Violet как текст на чёрном тускловат, поэтому иконки и цифры
+     берут его осветлённый вариант, а заливки — исходный. */
+  --accent: #a855f7;
+  --accent-soft: #1d0b33;
+  --info: #fefffc;
+  --info-soft: #232323;
 
   --hero: #151515;
   --on-hero: #ffffff;
@@ -117,15 +124,15 @@
   --nav-ink: #8c8c8c;
   --nav-active: #ffffff;
   --on-nav-active: #0d0d0d;
-  --nav-sel: #7c5cff;
+  --nav-sel: #8116e0;
   --on-nav-sel: #ffffff;
 
   --pos: #34d399;
   --pos-soft: #10291f;
   --neg: #f87171;
   --neg-soft: #2b1516;
-  --warn: #fbbf24;
-  --warn-soft: #2a1f0b;
+  --warn: #d0ff00;
+  --warn-soft: #1f2600;
 
   color-scheme: dark;
 }
