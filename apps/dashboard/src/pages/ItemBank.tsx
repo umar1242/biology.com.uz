@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, Minus, Pencil, TrendingUp, XCircle } from "lucide-react";
+import { AlertTriangle, Check, Minus, Pencil, RefreshCw, TrendingUp, XCircle } from "lucide-react";
 import { TopBar } from "../components/TopBar";
 import { apiFetch, ApiError } from "../lib/api";
 import { useI18n, type StringKey } from "../lib/i18n";
@@ -23,6 +23,14 @@ type BankItem = {
   suspect_key: boolean;
   discrimination: number | null;
   discrimination_band: DiscBand | null;
+  difficulty: number | null;
+  difficulty_se: number | null;
+  infit: number | null;
+  outfit: number | null;
+  fit_band: "overfit" | "productive" | "underfit" | "degrading" | null;
+  calibration_state: "none" | "provisional" | "stable";
+  calibration_responses: number;
+  calibration_responses_needed: number;
 };
 
 const TOPIC_KEYS: Record<string, StringKey> = {
@@ -207,6 +215,76 @@ function StatTile({ label, value, tone }: { label: string; value: number; tone?:
   );
 }
 
+type CalibrationRun = {
+  run: {
+    run_id: number | null;
+    run_at: string | null;
+    persons: number;
+    items: number;
+    converged: boolean;
+    responses: number;
+  } | null;
+  min_responses: number;
+};
+
+/**
+ * Calibration status and the button that recomputes it.
+ *
+ * Deliberately states how far off the threshold the bank is rather than just
+ * hiding the numbers: a teacher who sees no difficulties anywhere should know
+ * it is a shortage of answers, not a broken page.
+ */
+function CalibrationBar() {
+  const { t, formatDateTime } = useI18n();
+  const queryClient = useQueryClient();
+
+  const latest = useQuery({
+    queryKey: ["cert-calibration"],
+    queryFn: () => apiFetch<CalibrationRun>("/cert-calibration/latest"),
+  });
+
+  const run = useMutation({
+    mutationFn: () => apiFetch("/cert-calibration/run", { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cert-calibration"] });
+      queryClient.invalidateQueries({ queryKey: ["cert-items"] });
+    },
+  });
+
+  const info = latest.data?.run ?? null;
+
+  return (
+    <div className="mb-6 rounded-2xl border border-line bg-card p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-ink">{t("calibTitle")}</p>
+          <p className="mt-0.5 text-xs text-muted">
+            {info
+              ? t("calibLastRun", {
+                  date: formatDateTime(info.run_at ?? ""),
+                  persons: info.persons,
+                  items: info.items,
+                })
+              : t("calibNever")}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => run.mutate()}
+          disabled={run.isPending}
+          className="flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-on-brand disabled:opacity-50"
+        >
+          <RefreshCw size={14} className={run.isPending ? "animate-spin" : ""} />
+          {run.isPending ? t("calibRunning") : t("calibRun")}
+        </button>
+      </div>
+      <p className="mt-2.5 text-xs leading-snug text-muted">
+        {t("calibExplain", { min: latest.data?.min_responses ?? 30 })}
+      </p>
+    </div>
+  );
+}
+
 export function ItemBankPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -241,6 +319,12 @@ export function ItemBankPage() {
   const shown = useMemo(() => {
     const list = onlyProblems ? all.filter(isProblem) : [...all];
     if (sort === "difficulty") {
+      // Rasch difficulty when the item has been placed; share correct
+      // otherwise, so an uncalibrated bank still sorts sensibly.
+      const anyCalibrated = list.some((i) => i.difficulty !== null);
+      if (anyCalibrated) {
+        return list.sort((a, b) => (b.difficulty ?? -99) - (a.difficulty ?? -99));
+      }
       return list.sort((a, b) => (a.p_value ?? 2) - (b.p_value ?? 2));
     }
     if (sort === "discrimination") {
@@ -272,6 +356,8 @@ export function ItemBankPage() {
             <span className="font-medium text-ink">{t("discTitle")}</span> — {t("discExplain")}
           </p>
         </div>
+
+        <CalibrationBar />
 
         <div className="mb-5 flex flex-wrap items-center gap-2">
           {[

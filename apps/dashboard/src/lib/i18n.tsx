@@ -177,6 +177,38 @@ const STRINGS = {
   },
   diffTooEasySoft: { ru: "лёгкое", uz: "oson" },
   diffTooHardSoft: { ru: "трудное", uz: "qiyin" },
+  calibTitle: { ru: "Калибровка банка (модель Раша)", uz: "Bank kalibrovkasi (Rash modeli)" },
+  calibNever: { ru: "Ещё не запускалась", uz: "Hali ishga tushirilmagan" },
+  calibLastRun: {
+    ru: "{date} · учеников: {persons}, заданий: {items}",
+    uz: "{date} · o'quvchilar: {persons}, topshiriqlar: {items}",
+  },
+  calibRun: { ru: "Пересчитать", uz: "Qayta hisoblash" },
+  calibRunning: { ru: "Считаем…", uz: "Hisoblanmoqda…" },
+  calibExplain: {
+    ru: "Кладёт задания всех вариантов на одну шкалу трудности — в отличие от доли верных ответов, которая сравнима только внутри одного варианта. Показывается с {min} ответов на задание: ниже этого оценка неотличима от шума.",
+    uz: "Barcha variantlardagi topshiriqlarni bitta qiyinlik shkalasiga qo'yadi — to'g'ri javoblar ulushidan farqli, u faqat bitta variant ichida taqqoslanadi. Topshiriqqa {min} javobdan boshlab ko'rsatiladi: undan kam bo'lsa baho shovqindan farq qilmaydi.",
+  },
+  calibDifficulty: { ru: "Трудность", uz: "Qiyinlik" },
+  calibFit: { ru: "Соответствие", uz: "Moslik" },
+  calibNoData: {
+    ru: "Данных пока недостаточно: {have} ответов из {need}",
+    uz: "Ma'lumot yetarli emas: {need} dan {have} javob",
+  },
+  calibProvisional: { ru: "предварительно", uz: "dastlabki" },
+  fitProductive: { ru: "работает как ожидается", uz: "kutilganidek ishlaydi" },
+  fitUnderfit: {
+    ru: "ведёт себя непредсказуемо — вероятна двусмысленность или неверный ключ",
+    uz: "kutilmagan tarzda ishlaydi — noaniqlik yoki noto'g'ri kalit ehtimoli bor",
+  },
+  fitDegrading: {
+    ru: "разрушает измерение — задание стоит переписать или снять",
+    uz: "o'lchovni buzadi — topshiriqni qayta yozish yoki olib tashlash kerak",
+  },
+  fitOverfit: {
+    ru: "слишком предсказуемо — дублирует другие задания",
+    uz: "juda oldindan aytib bo'ladigan — boshqa topshiriqlarni takrorlaydi",
+  },
   scaleLegend: { ru: "Как читать", uz: "Qanday o'qish kerak" },
   statTotal: { ru: "Всего заданий", uz: "Jami topshiriq" },
   statNeedKey: { ru: "Проверить ключ", uz: "Kalitni tekshirish" },

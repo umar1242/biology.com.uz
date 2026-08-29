@@ -50,6 +50,14 @@ type Card = {
     discrimination: number | null;
     discrimination_band: "good" | "ok" | "weak" | "broken" | null;
     min_responses_for_verdict: number;
+    difficulty: number | null;
+    difficulty_se: number | null;
+    infit: number | null;
+    outfit: number | null;
+    fit_band: "overfit" | "productive" | "underfit" | "degrading" | null;
+    calibration_state: "none" | "provisional" | "stable";
+    calibration_responses: number;
+    calibration_responses_needed: number;
     options: OptionRow[];
   };
   usage: Usage[];
@@ -223,6 +231,73 @@ export function ItemCardPage() {
                   {c.status === "active" ? t("cardActive") : t("cardRetired")}
                 </Field>
               </div>
+            </div>
+
+            {/* Rasch placement — the only figure here comparable with items
+                from other variants. Shown as its own block because it answers
+                a different question than the counts above. */}
+            <div className="rounded-2xl border border-line bg-card p-5">
+              <p className="mb-3 text-sm font-semibold text-ink">{t("calibTitle")}</p>
+              {c.stats.difficulty === null ? (
+                <p className="text-sm text-muted">
+                  {t("calibNoData", {
+                    have: c.stats.calibration_responses,
+                    need: c.stats.calibration_responses_needed,
+                  })}
+                </p>
+              ) : (
+                <>
+                  <div className="mb-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
+                    <Field label={t("calibDifficulty")}>
+                      <span className="text-xl font-semibold tabular-nums">
+                        {c.stats.difficulty >= 0 ? "+" : ""}
+                        {c.stats.difficulty.toFixed(2)}
+                        {c.stats.difficulty_se !== null && (
+                          <span className="ml-1.5 text-sm font-normal text-muted">
+                            ± {c.stats.difficulty_se.toFixed(2)}
+                          </span>
+                        )}
+                      </span>
+                    </Field>
+                    <Field label="Infit">
+                      <span className="text-xl font-semibold tabular-nums">
+                        {c.stats.infit?.toFixed(2) ?? "—"}
+                      </span>
+                    </Field>
+                    <Field label="Outfit">
+                      <span className="text-xl font-semibold tabular-nums">
+                        {c.stats.outfit?.toFixed(2) ?? "—"}
+                      </span>
+                    </Field>
+                  </div>
+                  {c.stats.fit_band && (
+                    <p
+                      className={`text-sm ${
+                        c.stats.fit_band === "degrading"
+                          ? "text-neg"
+                          : c.stats.fit_band === "underfit"
+                            ? "text-warn"
+                            : "text-muted"
+                      }`}
+                    >
+                      {t(
+                        c.stats.fit_band === "degrading"
+                          ? "fitDegrading"
+                          : c.stats.fit_band === "underfit"
+                            ? "fitUnderfit"
+                            : c.stats.fit_band === "overfit"
+                              ? "fitOverfit"
+                              : "fitProductive",
+                      )}
+                    </p>
+                  )}
+                  {c.stats.calibration_state === "provisional" && (
+                    <p className="mt-2 text-xs text-muted">
+                      {t("calibProvisional")} · {c.stats.calibration_responses}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Statistics */}

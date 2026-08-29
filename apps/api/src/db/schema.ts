@@ -11,6 +11,7 @@ import {
   index,
   integer,
   jsonb,
+  doublePrecision,
   pgEnum,
   pgTable,
   primaryKey,
@@ -747,6 +748,49 @@ export const certExamItems = pgTable(
     primaryKey({ name: "cert_exam_items_pk", columns: [table.examId, table.taskNumber] }),
     index("idx_cert_exam_items_item").on(table.itemId),
     check("cert_exam_item_task_range", sql`${table.taskNumber} BETWEEN 1 AND 43`),
+  ],
+);
+
+/**
+ * One run of the Rasch calibration over the teacher's whole answer history.
+ *
+ * Kept as a snapshot with history rather than columns on cert_items: an item's
+ * difficulty is an estimate that sharpens as responses accumulate, and seeing
+ * it move — or refuse to settle — is itself the signal that something changed
+ * about the question or the cohort.
+ */
+export const certCalibrationRuns = pgTable("cert_calibration_runs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  teacherId: bigint("teacher_id", { mode: "number" })
+    .notNull()
+    .references(() => teachers.staffUserId),
+  runAt: timestamp("run_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Persons and items that survived the extreme-score screen. */
+  persons: integer("persons").notNull(),
+  items: integer("items").notNull(),
+  iterations: integer("iterations").notNull(),
+  converged: boolean("converged").notNull(),
+});
+
+export const certItemCalibrations = pgTable(
+  "cert_item_calibrations",
+  {
+    runId: bigint("run_id", { mode: "number" })
+      .notNull()
+      .references(() => certCalibrationRuns.id),
+    itemId: bigint("item_id", { mode: "number" })
+      .notNull()
+      .references(() => certItems.id),
+    /** Logits. Higher is harder. Comparable across variants — that is the point. */
+    difficulty: doublePrecision("difficulty").notNull(),
+    standardError: doublePrecision("standard_error").notNull(),
+    infit: doublePrecision("infit").notNull(),
+    outfit: doublePrecision("outfit").notNull(),
+    responses: integer("responses").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.runId, table.itemId] }),
+    index("idx_item_calibrations_item").on(table.itemId),
   ],
 );
 

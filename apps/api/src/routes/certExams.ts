@@ -12,6 +12,13 @@ import {
   students,
 } from "../db/schema.js";
 import { requireAuth, requireTeacher } from "../plugins/auth.js";
+import {
+  latestCalibrationByItem,
+  latestRun,
+  responseCountByItem,
+  runCalibration,
+} from "../lib/calibration.js";
+import { calibrationState, fitBand, MIN_RESPONSES_PROVISIONAL } from "../lib/rasch.js";
 import { accessibleCourseIds, loadAccessibleCourse } from "../lib/access.js";
 import { Conflict, NotFound, Unprocessable } from "../lib/errors.js";
 import { createPendingActionDeepLink } from "../telegram/pendingActions.js";
@@ -264,6 +271,25 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
   }));
 
 
+  // --- Rasch calibration ------------------------------------------------
+
+  /**
+   * Recalibrates the whole bank from every graded answer.
+   *
+   * Triggered by hand rather than on a schedule: the input changes only when a
+   * variant is reviewed, and an explicit button makes it obvious which numbers
+   * the teacher is looking at.
+   */
+  app.post("/cert-calibration/run", async (request) => {
+    const auth = requireTeacher(request);
+    return runCalibration(auth.teacherId);
+  });
+
+  app.get("/cert-calibration/latest", async (request) => {
+    const auth = requireAuth(request);
+    return { run: await latestRun(auth.teacherId), min_responses: MIN_RESPONSES_PROVISIONAL };
+  });
+
   // --- item bank -------------------------------------------------------
 
   /**
@@ -330,6 +356,8 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       .groupBy(certExamAnswers.itemId, certExamAnswers.chosenOption);
 
     const discrimination = await discriminationByItem(auth.teacherId);
+    const calibration = await latestCalibrationByItem(auth.teacherId);
+    const responseCounts = await responseCountByItem(auth.teacherId);
 
     const topChoice = new Map<number, { option: string; n: number }>();
     for (const d of distribution) {
@@ -347,6 +375,8 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         !closed && r.pointsGraded > 0 ? r.pointsAwarded / (r.pointsGraded * maxPoints) : null;
 
       const d = discrimination.get(r.id) ?? null;
+      const cal = calibration.get(r.id) ?? null;
+      const calResponses = responseCounts.get(r.id) ?? 0;
 
       return {
         id: r.id,
@@ -366,6 +396,17 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         // until some variant has enough graded attempts to rank within.
         discrimination: d,
         discrimination_band: d === null ? null : discriminationBand(d),
+        // Rasch difficulty in logits — the one figure comparable ACROSS
+        // variants, unlike p_value and discrimination above. Absent, never
+        // approximate, until the item has enough responses to place.
+        difficulty: cal?.difficulty ?? null,
+        difficulty_se: cal?.standard_error ?? null,
+        infit: cal?.infit ?? null,
+        outfit: cal?.outfit ?? null,
+        fit_band: cal ? fitBand(cal.outfit) : null,
+        calibration_state: calibrationState(calResponses),
+        calibration_responses: calResponses,
+        calibration_responses_needed: MIN_RESPONSES_PROVISIONAL,
         // Deliberately conservative: a handful of responses is noise, and a
         // flag a teacher learns to ignore is worse than no flag.
         suspect_key:
@@ -514,6 +555,9 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       flags.push("key_revised_mid_flight");
     }
 
+    const calibration = (await latestCalibrationByItem(auth.teacherId)).get(item.id) ?? null;
+    const calibrationResponses = (await responseCountByItem(auth.teacherId)).get(item.id) ?? 0;
+
     return {
       id: item.id,
       code: itemCode(item.id, item.taskNumber),
@@ -542,6 +586,17 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         discrimination,
         discrimination_band: discrimination === null ? null : discriminationBand(discrimination),
         min_responses_for_verdict: MIN_ATTEMPTS_FOR_DISCRIMINATION,
+        // Rasch placement. Unlike p_value and discrimination above, this is
+        // comparable with items from other variants — that is what the whole
+        // calibration exists for.
+        difficulty: calibration?.difficulty ?? null,
+        difficulty_se: calibration?.standard_error ?? null,
+        infit: calibration?.infit ?? null,
+        outfit: calibration?.outfit ?? null,
+        fit_band: calibration ? fitBand(calibration.outfit) : null,
+        calibration_state: calibrationState(calibrationResponses),
+        calibration_responses: calibrationResponses,
+        calibration_responses_needed: MIN_RESPONSES_PROVISIONAL,
         options: optionRows,
       },
       usage,
