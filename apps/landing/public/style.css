@@ -264,6 +264,9 @@ footer a:hover { color: var(--text); }
   .trust div:nth-child(2) { border-right: 0; }
   .trust div:nth-child(-n+2) { border-bottom: 1px solid var(--line-soft); }
   .topbar-right { margin-left: auto; }
+  /* Две кнопки в шапку телефона не влезают: остаётся та, что ведёт к
+     действию, вторая дублируется ссылкой в первом экране. */
+  .topbar-right .btn.ghost { display: none; }
 }
 @media (max-width: 620px) {
   .cards, .steps, .bullets, .bands { grid-template-columns: 1fr; }
