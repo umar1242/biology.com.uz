@@ -45,6 +45,10 @@ Hostname на тот же tunnel token, поэтому второй `cloudflared
 7. Добавьте второй Public Hostname тому же туннелю (Zero Trust → Networks →
    Tunnels → ваш туннель → **Public Hostname → Add a public hostname**):
    `admin.biolog.com.uz` → Service: `HTTP` → `dashboard:80`.
+7a. Добавьте третий Public Hostname тем же способом — публичная страница
+   проекта на голом домене: `biolog.com.uz` → Service: `HTTP` →
+   `landing:80`. Отдельно стоит добавить и `www.biolog.com.uz` на тот же
+   сервис, иначе набранный с `www` адрес не откроется.
 8. Вставьте токен в `.env` в корне проекта:
    ```
    CLOUDFLARE_TUNNEL_TOKEN=eyJhbG...
@@ -105,6 +109,7 @@ docker compose -f docker-compose.prod.yml exec api npx tsx src/db/migrate.ts
 
 ## 4. Проверка
 
+- Страница проекта: `http://localhost:8282` (LAN) или `https://biolog.com.uz`
 - Дашборд: `http://localhost:8080` (LAN) или `https://admin.biolog.com.uz`
   (публично, через туннель) — оба ведут в один и тот же контейнер
 - API напрямую наружу не торчит — проверяется через дашборд/miniapp

@@ -1,0 +1,26 @@
+:80 {
+	encode gzip
+
+	# Как в двух других Caddyfile: туннель говорит с контейнером по plain
+	# HTTP, поэтому X-Forwarded-Proto от края — единственный признак того,
+	# как посетитель пришёл на самом деле. Ссылку, набранную как http://,
+	# нельзя оставлять незашифрованной.
+	@insecure header X-Forwarded-Proto http
+	redir @insecure https://{host}{uri} permanent
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+
+	# Витрина — один статический файл, без SPA-роутинга: 404 здесь должен
+	# оставаться 404, а не молча отдавать главную.
+	root * /srv
+	file_server
+	handle_errors {
+		respond "Страница не найдена" {http.error.status_code}
+	}
+}

@@ -94,13 +94,24 @@ services:
       # DEPLOY.md for the one-time tunnel setup.
       - "127.0.0.1:8181:80"
 
-  # One tunnel, two Public Hostnames configured in the Cloudflare Zero
+  landing:
+    build:
+      context: .
+      dockerfile: apps/landing/Dockerfile
+    restart: unless-stopped
+    ports:
+      # The project's public page — served on the bare domain. No api
+      # dependency: it is static HTML and must stay up even if the API is
+      # being redeployed.
+      - "127.0.0.1:8282:80"
+
+  # One tunnel, three Public Hostnames configured in the Cloudflare Zero
   # Trust dashboard (not here — the token-based `tunnel run` reads its
   # routing remotely): one pointed at http://miniapp:80 (required —
   # Telegram only opens Mini Apps from a public https:// URL), one at
   # http://dashboard:80 (so the teacher can reach the panel away from the
-  # LAN too). See DEPLOY.md for the one-time setup (TUNNEL_TOKEN in the
-  # root .env).
+  # LAN too), and one at http://landing:80 for the bare domain. See
+  # DEPLOY.md for the one-time setup (TUNNEL_TOKEN in the root .env).
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
@@ -110,6 +121,7 @@ services:
     depends_on:
       - miniapp
       - dashboard
+      - landing
 
 volumes:
   postgres_data:

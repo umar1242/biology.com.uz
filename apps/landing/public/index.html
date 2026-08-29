@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biolog — платформа для онлайн-курсов в Телеграме</title>
+<meta name="description" content="Курс живёт в Телеграме: ученик записывается, получает уроки и сдаёт работы, не выходя из мессенджера. Преподаватель видит очередь проверки, оплаты и качество заданий по модели Раша.">
+<meta property="og:title" content="Biolog — платформа для онлайн-курсов в Телеграме">
+<meta property="og:description" content="Запись, оплаты, проверка домашних работ и сертификатные варианты — в одном месте. Качество заданий считается по модели Раша.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://biolog.com.uz/">
+<meta name="theme-color" content="#14111a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2314111a'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23e15b6d'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,600&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+/* ------------------------------------------------------------------
+   Палитра из гистологии: тёмное поле микроскопа, эозиновый акцент,
+   метиленовый синий — для данных. Одна тема: это витрина.
+   Компоновка блочная — шапка, карточки, полосы, ряд шагов, — чтобы
+   страница читалась взглядом, а не только чтением.
+   ------------------------------------------------------------------ */
+:root {
+  --ink:        #14111a;
+  --ink-deep:   #100d15;
+  --surface:    #1c1825;
+  --surface-2:  #241f2f;
+  --line:       #322b40;
+  --line-soft:  #262031;
+  --text:       #efebf3;
+  --text-dim:   #a79fb4;
+  --text-faint: #6f677e;
+  --eosin:      #e15b6d;
+  --eosin-lift: #ef7f8d;
+  --eosin-wash: rgba(225, 91, 109, 0.13);
+  --methyl:     #63a8c4;
+  --leaf:       #74b98f;
+  --amber:      #d9a54c;
+
+  --display: "Literata", Georgia, "Times New Roman", serif;
+  --body: "Golos Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  --wrap: 1160px;
+  --pad: clamp(20px, 4.5vw, 44px);
+  --r: 18px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { width: 100%; max-width: var(--wrap); margin-inline: auto; padding-inline: var(--pad); }
+
+h1, h2 { font-family: var(--display); font-weight: 600; letter-spacing: -0.025em; text-wrap: balance; margin: 0; line-height: 1.12; }
+h3, h4 { font-family: var(--body); font-weight: 600; margin: 0; letter-spacing: -0.005em; }
+p { margin: 0; }
+a { color: inherit; }
+ul { margin: 0; padding: 0; list-style: none; }
+
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--text-faint); }
+
+section { padding-block: clamp(64px, 8vw, 104px); }
+.section-head { display: flex; flex-direction: column; gap: 14px; }
+.section-head h2 { font-size: clamp(27px, 3.7vw, 40px); max-width: 18ch; }
+.section-head p { color: var(--text-dim); max-width: 50ch; font-size: 15.5px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 22px; border-radius: 999px;
+  font-family: var(--body); font-size: 14.5px; font-weight: 600;
+  text-decoration: none; border: 1px solid transparent;
+  background: var(--eosin); color: #1a0d11; white-space: nowrap;
+  transition: background .18s, transform .16s, border-color .18s;
+}
+.btn:hover { background: var(--eosin-lift); transform: translateY(-1px); }
+.btn.ghost { background: transparent; border-color: var(--line); color: var(--text); }
+.btn.ghost:hover { border-color: var(--eosin); background: transparent; }
+.btn.sm { padding: 9px 18px; font-size: 13.5px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--eosin-lift); outline-offset: 3px; border-radius: 8px; }
+
+/* ---------------- шапка ---------------- */
+.topbar { position: sticky; top: 0; z-index: 40; background: rgba(20,17,26,.86); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line-soft); }
+.topbar-in { display: flex; align-items: center; gap: 26px; height: 66px; }
+.brand { display: flex; align-items: center; gap: 9px; font-family: var(--display); font-weight: 700; font-size: 17.5px; text-decoration: none; letter-spacing: -0.02em; }
+.brand i { width: 9px; height: 9px; border-radius: 50%; background: var(--eosin); box-shadow: 0 0 0 4px var(--eosin-wash); }
+.nav { display: flex; gap: 24px; margin-left: auto; }
+.nav a { text-decoration: none; color: var(--text-dim); font-size: 14px; padding: 5px 0; border-bottom: 1px solid transparent; transition: color .18s, border-color .18s; }
+.nav a:hover { color: var(--text); border-bottom-color: var(--eosin); }
+
+/* ---------------- первый экран ---------------- */
+.hero { padding-top: clamp(44px, 6vw, 76px); padding-bottom: clamp(40px, 5vw, 68px); background: radial-gradient(62% 56% at 82% 14%, rgba(225,91,109,.17), transparent 70%), var(--ink); }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(0, .94fr); gap: clamp(30px, 5vw, 66px); align-items: center; }
+.hero h1 { font-size: clamp(36px, 5.4vw, 58px); letter-spacing: -0.035em; }
+.hero h1 em { font-style: italic; color: var(--eosin); }
+.hero-copy { display: flex; flex-direction: column; gap: 22px; }
+.hero-copy p { color: var(--text-dim); max-width: 46ch; font-size: 16.5px; }
+.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+
+/* ---------------- полоса фактов ---------------- */
+.strip { border-block: 1px solid var(--line-soft); background: var(--ink-deep); }
+.strip-note { padding-top: 22px; font-size: 12.5px; color: var(--text-faint); }
+.strip-in { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line-soft); margin-top: 18px; }
+.fact { background: var(--ink-deep); padding: 24px 20px; display: flex; flex-direction: column; gap: 3px; }
+.fact b { font-family: var(--display); font-size: 25px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.fact span { font-size: 13px; color: var(--text-dim); line-height: 1.45; }
+
+/* ---------------- карточки возможностей ---------------- */
+.feat { display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); gap: clamp(28px, 4vw, 56px); align-items: start; }
+.feat-aside { display: flex; flex-direction: column; gap: 18px; position: sticky; top: 96px; }
+.cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 24px 22px; display: flex; flex-direction: column; gap: 11px; transition: border-color .2s, transform .2s; }
+.card:hover { border-color: #453b57; transform: translateY(-2px); }
+.card .ic { width: 36px; height: 36px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); display: grid; place-items: center; color: var(--methyl); margin-bottom: 3px; }
+.card h3 { font-size: 17px; }
+.card p { font-size: 14.5px; color: var(--text-dim); }
+.card.mark { background: linear-gradient(158deg, var(--eosin) 0%, #c9495f 100%); border-color: transparent; }
+.card.mark h3, .card.mark p { color: #1c0d11; }
+.card.mark p { color: rgba(28,13,17,.8); }
+.card.mark .ic { background: rgba(28,13,17,.14); border-color: rgba(28,13,17,.14); color: #1c0d11; }
+
+/* ---------------- макеты интерфейса ---------------- */
+.shots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 44px; align-items: start; }
+.mock { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; box-shadow: 0 24px 56px -32px rgba(0,0,0,.9); }
+.mock-bar { display: flex; align-items: center; gap: 9px; padding: 12px 15px; border-bottom: 1px solid var(--line-soft); background: var(--surface-2); }
+.mock-bar span { font-size: 12px; color: var(--text-dim); }
+.mock-dots { display: flex; gap: 5px; }
+.mock-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); display: block; }
+.mock-body { padding: 6px 15px 14px; }
+.mock-cap { padding: 14px 15px 16px; border-top: 1px solid var(--line-soft); font-size: 13.5px; color: var(--text-dim); background: var(--ink-deep); }
+.mock-cap b { color: var(--text); font-weight: 600; }
+
+.queue-row { display: flex; align-items: center; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
+.queue-row:last-child { border-bottom: 0; }
+.avatar { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+.who { display: flex; flex-direction: column; min-width: 0; }
+.who b { font-size: 13.5px; font-weight: 600; }
+.who span { font-size: 12px; color: var(--text-faint); }
+.pill { margin-left: auto; flex: none; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 999px; font-family: var(--mono); }
+.pill-wait { background: rgba(217,165,76,.16); color: var(--amber); }
+.pill-late { background: var(--eosin-wash); color: var(--eosin-lift); }
+.pill-done { background: rgba(116,185,143,.14); color: var(--leaf); }
+
+.bubble { background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px 14px 14px 14px; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; margin: 8px 0 2px; }
+.bubble .t { font-family: var(--display); font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 7px; }
+.bubble hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
+.bubble .r { display: flex; gap: 7px; color: var(--text-dim); }
+.bubble .r b { color: var(--text); font-weight: 600; flex: none; }
+.bubble .todo { margin-top: 10px; color: var(--text); }
+.bubble .tags { margin-top: 10px; font-family: var(--mono); font-size: 11.5px; color: var(--methyl); }
+
+/* телефон */
+.phone { max-width: 320px; margin-inline: auto; border-radius: 30px; border: 1px solid var(--line); background: var(--surface); padding: 11px; box-shadow: 0 34px 70px -34px rgba(0,0,0,.95); }
+.phone-screen { border-radius: 21px; background: var(--ink-deep); overflow: hidden; }
+.phone-head { padding: 14px 15px 12px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.phone-course { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; }
+.chev { width: 7px; height: 7px; border-right: 1.6px solid var(--text-faint); border-bottom: 1.6px solid var(--text-faint); transform: rotate(45deg) translate(-2px,-2px); }
+table.lessons { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.lessons th { text-align: left; font-weight: 400; color: var(--text-faint); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 10px 11px; border-bottom: 1px solid var(--line-soft); font-family: var(--mono); }
+table.lessons td { padding: 11px; border-bottom: 1px solid var(--line-soft); color: var(--text-dim); white-space: nowrap; }
+table.lessons td.n { font-family: var(--mono); color: var(--text-faint); font-size: 11.5px; width: 30px; }
+table.lessons td.name { color: var(--text); white-space: normal; }
+table.lessons tr:last-child td { border-bottom: 0; }
+.dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.dot-live { background: var(--eosin); box-shadow: 0 0 0 3px var(--eosin-wash); }
+.dot-rec { background: var(--text-faint); }
+
+/* ---------------- ряд шагов ---------------- */
+.process { text-align: center; }
+.process .section-head { align-items: center; }
+.process .section-head h2, .process .section-head p { max-width: 32ch; }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 56px; position: relative; }
+.step { padding-top: 62px; position: relative; display: flex; flex-direction: column; gap: 8px; }
+.step .num { position: absolute; top: -34px; left: 50%; transform: translateX(-50%); font-family: var(--display); font-size: 54px; font-weight: 700; line-height: 1; color: #2b2436; letter-spacing: -0.04em; }
+.step::before { content: ""; position: absolute; top: 34px; left: -10px; right: -10px; height: 1px; background: var(--line); }
+.step:first-child::before { left: 50%; }
+.step:last-child::before { right: 50%; }
+.step::after { content: ""; position: absolute; top: 30px; left: 50%; transform: translateX(-50%); width: 9px; height: 9px; border-radius: 50%; background: var(--eosin); box-shadow: 0 0 0 5px var(--ink); }
+.step h4 { font-size: 16px; }
+.step p { font-size: 13.5px; color: var(--text-dim); max-width: 26ch; margin-inline: auto; }
+
+/* ---------------- сертификат ---------------- */
+.scale { display: flex; gap: 3px; margin-top: 38px; }
+.scale span { height: 10px; border-radius: 3px; background: var(--line); }
+.scale span:first-child { background: var(--methyl); }
+.scale span:last-child { background: var(--eosin); }
+.bands { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); }
+.band { padding: 20px 18px; border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.band:last-child { border-right: 0; }
+.band .rng { font-family: var(--mono); font-size: 11.5px; color: var(--eosin-lift); }
+.band .lbl { font-size: 14.5px; font-weight: 600; }
+.band .sub { font-size: 12.5px; color: var(--text-faint); line-height: 1.45; }
+
+/* ---------------- Раш ---------------- */
+.rasch { display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); gap: clamp(28px, 4vw, 56px); align-items: center; }
+.bullets { display: flex; flex-direction: column; gap: 13px; margin-top: 26px; }
+.bullets div { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 12px; font-size: 14.5px; color: var(--text-dim); }
+.bullets b { color: var(--text); font-weight: 600; }
+.bullets .m { color: var(--eosin); font-family: var(--mono); font-size: 12px; padding-top: 2px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+/* Таблица шире экрана телефона — прокручивается внутри панели, а не режется
+   по краю и не заставляет ездить вбок всю страницу. */
+.panel .scroll { overflow-x: auto; }
+.panel-head { padding: 15px 20px; border-bottom: 1px solid var(--line-soft); background: var(--surface-2); font-size: 13px; color: var(--text-dim); }
+table.data { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+table.data th, table.data td { text-align: right; padding: 12px 20px; font-size: 14.5px; border-bottom: 1px solid var(--line-soft); }
+table.data th:first-child, table.data td:first-child { text-align: left; }
+table.data th { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-faint); font-weight: 400; }
+table.data td { color: var(--text-dim); }
+table.data td:first-child { color: var(--text); font-weight: 500; }
+table.data tr:last-child td { border-bottom: 0; }
+table.data tr.hi td { color: var(--text); background: var(--eosin-wash); }
+.panel-foot { padding: 14px 20px 16px; border-top: 1px solid var(--line-soft); background: var(--ink-deep); font-size: 13px; color: var(--text-faint); line-height: 1.55; }
+
+/* ---------------- что получает преподаватель ---------------- */
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: var(--r); overflow: hidden; margin-top: 40px; }
+.col { background: var(--ink); padding: 28px 26px; display: flex; flex-direction: column; gap: 15px; }
+.col.mark { background: var(--surface); }
+.col h3 { font-size: 15.5px; }
+.col li { font-size: 15px; color: var(--text-dim); padding-left: 18px; position: relative; margin-bottom: 11px; }
+.col li:last-child { margin-bottom: 0; }
+.col li::before { content: ""; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.col.mark li::before { background: var(--eosin); }
+
+/* ---------------- финал ---------------- */
+.cta-band { background: var(--ink-deep); border-block: 1px solid var(--line-soft); }
+.cta-in { display: flex; align-items: center; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
+.cta-in h2 { font-size: clamp(26px, 3.4vw, 38px); max-width: 18ch; }
+.cta-in p { color: var(--text-dim); margin-top: 10px; max-width: 46ch; font-size: 15.5px; }
+
+footer { padding-block: 26px; color: var(--text-faint); font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; }
+footer a { text-decoration: none; }
+footer a:hover { color: var(--text); }
+
+@media (max-width: 940px) {
+  .hero-grid, .feat, .rasch, .shots, .cols { grid-template-columns: 1fr; }
+  .feat-aside { position: static; }
+  .nav { display: none; }
+  .topbar-in .btn { margin-left: auto; }
+  .steps { grid-template-columns: repeat(2, 1fr); row-gap: 56px; }
+  .step::before { display: none; }
+  .strip-in { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 620px) {
+  .cards, .bands, .steps { grid-template-columns: 1fr; }
+  .band { border-right: 0; border-bottom: 1px solid var(--line-soft); }
+  table.data th, table.data td { padding: 11px 13px; font-size: 13.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+  .btn:hover, .card:hover { transform: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="#top"><i></i>biolog<span style="color:var(--text-faint)">.uz</span></a>
+    <nav class="nav">
+      <a href="#features">Возможности</a>
+      <a href="#screens">Как выглядит</a>
+      <a href="#process">Запуск</a>
+      <a href="#cert">Сертификат</a>
+      <a href="#rasch">Модель Раша</a>
+    </nav>
+    <a class="btn sm" href="https://t.me/Biolog1242bot">Написать нам</a>
+  </div>
+</header>
+
+<!-- ============ первый экран ============ -->
+<section class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow">Платформа для онлайн-курсов</span>
+      <h1>Курс остаётся в Телеграме. <em>Порядок</em> появляется здесь.</h1>
+      <p>Ученик записывается, получает уроки и сдаёт работы, не выходя из мессенджера. Преподаватель видит очередь проверки, оплаты и качество заданий.</p>
+      <div class="hero-actions">
+        <a class="btn" href="#offer">Получить платформу</a>
+        <a class="btn ghost" href="#features">Что она умеет</a>
+      </div>
+    </div>
+
+    <div class="phone" aria-label="Экран приложения: список уроков">
+      <div class="phone-screen">
+        <div class="phone-head">
+          <div class="phone-course">Биология · 11 класс <span class="chev"></span></div>
+          <span class="eyebrow" style="letter-spacing:.1em">Уроки</span>
+        </div>
+        <table class="lessons">
+          <thead><tr><th>№</th><th>Урок</th><th>Тип</th><th>Дата</th></tr></thead>
+          <tbody>
+            <tr><td class="n">01</td><td class="name">Клетка</td><td><span class="dot dot-rec"></span>Запись</td><td>12.09</td></tr>
+            <tr><td class="n">02</td><td class="name">Митоз и мейоз</td><td><span class="dot dot-rec"></span>Запись</td><td>15.09</td></tr>
+            <tr><td class="n">03</td><td class="name">Генетика</td><td><span class="dot dot-live"></span>Live</td><td>19.09</td></tr>
+            <tr><td class="n">04</td><td class="name">Законы Менделя</td><td><span class="dot dot-rec"></span>Запись</td><td>22.09</td></tr>
+            <tr><td class="n">05</td><td class="name">Пробный вариант</td><td><span class="dot dot-live"></span>Live</td><td>26.09</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ полоса фактов ============ -->
+<div class="strip">
+  <div class="wrap">
+    <p class="strip-note">Работает на действующем курсе биологии и химии</p>
+    <div class="strip-in">
+      <div class="fact"><b>~1 мин</b><span>от клика по ссылке до группы курса</span></div>
+      <div class="fact"><b>43</b><span>задания в сертификатном варианте</span></div>
+      <div class="fact"><b>2</b><span>языка интерфейса: русский и узбекский</span></div>
+      <div class="fact"><b>0</b><span>таблиц, которые надо вести вручную</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ карточки ============ -->
+<section id="features">
+  <div class="wrap feat">
+    <div class="feat-aside">
+      <div class="section-head">
+        <span class="eyebrow">Возможности</span>
+        <h2>Всё, чем занят преподаватель, кроме самого преподавания</h2>
+        <p>Запись, оплаты, дисциплина и проверка работ автоматизированы ровно настолько, чтобы решения остались за вами.</p>
+      </div>
+      <a class="btn ghost" href="#screens">Посмотреть экраны</a>
+    </div>
+
+    <div class="cards">
+      <article class="card mark">
+        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5 3 11l6 3 3 6z"/></svg></div>
+        <h3>Запись через бота</h3>
+        <p>Ссылка курса, подтверждённый Телеграмом номер, короткая анкета — и ученик в группе. Вручную ничего переписывать не нужно.</p>
+      </article>
+
+      <article class="card">
+        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg></div>
+        <h3>Уроки и модули</h3>
+        <p>Расписание таблицей, живые эфиры и записи. Видео урока приходит ученику прямо в чат.</p>
+      </article>
+
+      <article class="card">
+        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3M8 22h8"/><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/></svg></div>
+        <h3>Проверка голосом</h3>
+        <p>Ученик фотографирует тетрадь, работа встаёт в очередь. Ответить голосом быстрее, чем набирать текст.</p>
+      </article>
+
+      <article class="card">
+        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <h3>Оплата и доступ</h3>
+        <p>Первые уроки бесплатны. Нет оплаты — доступ замирает сам, а ученик остаётся в группе, пока вы не решите иначе.</p>
+      </article>
+
+      <article class="card">
+        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></div>
+        <h3>Помощники</h3>
+        <p>Ассистент получает доступ только к нужным курсам и только к тем действиям, которые вы разрешили.</p>
+      </article>
+
+      <article class="card">
+        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div>
+        <h3>Уведомления в группу</h3>
+        <p>События приходят в общий чат администраторов одним форматом и с хештегами, по которым ищется история ученика.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ экраны ============ -->
+<section id="screens" style="background:var(--ink-deep);border-block:1px solid var(--line-soft)">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Как выглядит</span>
+      <h2>Два экрана, на которых держится курс</h2>
+    </div>
+
+    <div class="shots">
+      <div class="mock">
+        <div class="mock-bar"><div class="mock-dots"><i></i><i></i><i></i></div><span>Проверка · Биология 11 класс</span></div>
+        <div class="mock-body">
+          <div class="queue-row"><span class="avatar">АК</span><span class="who"><b>Азиз Каримов</b><span>Урок 03 · генетика</span></span><span class="pill pill-wait">ждёт</span></div>
+          <div class="queue-row"><span class="avatar">МН</span><span class="who"><b>Малика Нурматова</b><span>Урок 03 · позже срока</span></span><span class="pill pill-late">опоздание</span></div>
+          <div class="queue-row"><span class="avatar">ДС</span><span class="who"><b>Дилшод Саидов</b><span>Урок 02 · митоз</span></span><span class="pill pill-wait">ждёт</span></div>
+          <div class="queue-row"><span class="avatar">ЗР</span><span class="who"><b>Зарина Рахимова</b><span>Урок 02 · проверено</span></span><span class="pill pill-done">готово</span></div>
+        </div>
+        <div class="mock-cap"><b>Очередь проверки.</b> Работы не теряются в переписке, опоздание отмечается само.</div>
+      </div>
+
+      <div class="mock">
+        <div class="mock-bar"><div class="mock-dots"><i></i><i></i><i></i></div><span>Уведомления · 4 участника</span></div>
+        <div class="mock-body">
+          <div class="bubble">
+            <div class="t"><span aria-hidden="true">🔴</span>Пробный период закончился</div>
+            <hr>
+            <div class="r"><b>Ученик:</b><span>Дилшод Саидов · #12</span></div>
+            <div class="r"><b>Курс:</b><span>Биология · 11 класс</span></div>
+            <div class="r"><b>Уроки:</b><span>3 пройдено, бесплатных 2</span></div>
+            <div class="todo">➡️ Дождитесь оплаты или отчислите в разделе «Отчисление».</div>
+            <div class="tags">#trial_expired #student_12 #course_3</div>
+          </div>
+        </div>
+        <div class="mock-cap"><b>Чат администраторов.</b> Одно событие — одно сообщение одного вида, с хештегами для поиска.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ шаги ============ -->
+<section class="process" id="process">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Запуск</span>
+      <h2>От первого разговора до проверенной работы</h2>
+      <p>Каждый шаг начинается там, где закончился предыдущий.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step"><span class="num">01</span><h4>Разбираем курс</h4><p>Смотрим, как вы ведёте занятия сейчас.</p></div>
+      <div class="step"><span class="num">02</span><h4>Заводим в платформе</h4><p>Модули, уроки, вариант экзамена и группа.</p></div>
+      <div class="step"><span class="num">03</span><h4>Публикуете ссылку</h4><p>Ученики записываются сами, через бота.</p></div>
+      <div class="step"><span class="num">04</span><h4>Ведёте поток</h4><p>Проверка, оплаты и напоминания идут сами.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ сертификат ============ -->
+<section id="cert" style="background:var(--ink-deep);border-block:1px solid var(--line-soft)">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Milliy Sertifikat</span>
+      <h2>Вариант повторяет государственную структуру экзамена</h2>
+      <p>Те же группы заданий, те же веса, тот же регламент времени.</p>
+    </div>
+
+    <div class="scale" aria-hidden="true">
+      <span style="flex:32"></span><span style="flex:3"></span><span style="flex:5"></span><span style="flex:3"></span>
+    </div>
+
+    <div class="bands">
+      <div class="band"><span class="rng">1 — 32</span><span class="lbl">Закрытые</span><span class="sub">Варианты A–D. Проверяются по ключу автоматически.</span></div>
+      <div class="band"><span class="rng">33 — 35</span><span class="lbl">A–F</span><span class="sub">Шесть вариантов ответа.</span></div>
+      <div class="band"><span class="rng">36 — 40</span><span class="lbl">Краткий ответ</span><span class="sub">Ответ вписывается, а не выбирается.</span></div>
+      <div class="band"><span class="rng">41 — 43</span><span class="lbl">Развёрнутые</span><span class="sub">30, 35 и 10 баллов. Проверяет преподаватель.</span></div>
+    </div>
+
+    <p style="margin-top:20px;font-size:13.5px;color:var(--text-faint);max-width:64ch;line-height:1.6">Решение заданий 36–43 ученик отправляет фотографией из приложения. Итоговый балл считается как в настоящем сертификате: половины весят поровну, а выше 65 баллов растёт не процент, а уровень.</p>
+  </div>
+</section>
+
+<!-- ============ Раш ============ -->
+<section id="rasch">
+  <div class="wrap rasch">
+    <div>
+      <div class="section-head">
+        <span class="eyebrow">Качество заданий</span>
+        <h2>Трудность считается по модели Раша</h2>
+        <p>Задания и ученики ложатся на одну шкалу логитов, поэтому трудность перестаёт зависеть от того, в каком варианте задание стояло.</p>
+      </div>
+      <div class="bullets">
+        <div><span class="m">→</span><span><b>Трудность и погрешность</b> — оценка в логитах и стандартная ошибка.</span></div>
+        <div><span class="m">→</span><span><b>Infit и outfit</b> находят задание с двусмысленной формулировкой или ошибкой в ключе.</span></div>
+        <div><span class="m">→</span><span><b>Якорные задания</b> связывают варианты: новый ложится на ту же шкалу.</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">Восстановление известных трудностей на модельных данных</div>
+      <div class="scroll">
+      <table class="data">
+        <thead><tr><th>Учеников</th><th>Корреляция</th><th>RMSE</th><th>Заявленная SE</th></tr></thead>
+        <tbody>
+          <tr><td>10</td><td>0,788</td><td>0,898</td><td>0,887</td></tr>
+          <tr><td>30</td><td>0,932</td><td>0,505</td><td>0,491</td></tr>
+          <tr class="hi"><td>100</td><td>0,972</td><td>0,279</td><td>0,252</td></tr>
+          <tr><td>1000</td><td>0,997</td><td>0,091</td><td>0,078</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="panel-foot">Реальная ошибка почти совпадает с заявленной: движок не занижает собственную погрешность. Пока на задание меньше 30 ответов, трудность не показывается вообще — платформа пишет, сколько ответов ещё нужно.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ что получает преподаватель ============ -->
+<section id="offer" style="background:var(--ink-deep);border-block:1px solid var(--line-soft)">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Как это получить</span>
+      <h2>Платформа передаётся преподавателю и настраивается под его курс</h2>
+      <p>Это не аренда обезличенного сервиса: курс, материалы и ученики — ваши.</p>
+    </div>
+
+    <div class="cols">
+      <div class="col">
+        <h3>Что уже есть</h3>
+        <ul>
+          <li>Приложение ученика в Телеграме и бот записи</li>
+          <li>Панель преподавателя и помощники с правами</li>
+          <li>Проверка работ, дедлайны, напоминания</li>
+          <li>Сертификатные варианты и банк заданий</li>
+          <li>Русский и узбекский интерфейс</li>
+        </ul>
+      </div>
+      <div class="col mark">
+        <h3>Что настраивается под вас</h3>
+        <ul>
+          <li>Структура курса, модули и расписание</li>
+          <li>Длина пробного периода и правила доступа</li>
+          <li>Штрафные баллы и порог отчисления</li>
+          <li>Оформление и тексты, которые видит ученик</li>
+          <li>Доработки под ваш способ вести занятия</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ финал ============ -->
+<div class="cta-band">
+  <div class="wrap" style="padding-block:clamp(48px,6vw,72px)">
+    <div class="cta-in">
+      <div>
+        <h2>Начинаем с одного потока</h2>
+        <p>Настройку берём на себя. Вы смотрите на своих учениках, как это работает, и решаете дальше.</p>
+      </div>
+      <a class="btn" href="https://t.me/Biolog1242bot">Написать в Телеграм</a>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <footer>
+    <span>biolog.com.uz</span>
+    <span>Биология и химия · подготовка к Milliy Sertifikat</span>
+    <span style="margin-left:auto"><a href="https://t.me/Biolog1242bot">Телеграм</a></span>
+  </footer>
+</div>
+
+</body>
+</html>
