@@ -9,21 +9,23 @@
 	redir @insecure https://{host}{uri} permanent
 
 	header {
-		# Витрина крошечная, а её страницы меняются часто. no-cache не
-		# запрещает кэш — он требует спросить сервер перед показом, и при
-		# неизменном файле ответ будет 304 без тела.
-		#
-		# Для HTML этого достаточно (Cloudflare отдаёт его как DYNAMIC), но
-		# на .css край подставляет свой max-age=14400 и наш заголовок туда
-		# не доходит. Поэтому ссылка на стили версионирована: /style.css?v=N.
-		# Меняете style.css — увеличивайте N в обеих страницах, иначе
-		# посетитель со старой копией увидит новую разметку со старым CSS.
-		Cache-Control "no-cache"
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		X-Frame-Options "SAMEORIGIN"
 		-Server
+	}
+
+	# Страницы не должны кэшироваться нигде: ни в браузере, ни на краю
+	# Cloudflare. no-cache разрешает хранить копию при условии проверки, и
+	# один из узлов Cloudflare этим воспользовался — посетители рядом с ним
+	# несколько часов видели откатанную версию. no-store запрещает хранить
+	# вовсе, а CDN-Cache-Control говорит то же самое отдельно краю, потому
+	# что для статики он подставляет собственные правила поверх наших.
+	@pages path / /uz /uz/ *.html
+	header @pages {
+		Cache-Control "no-store"
+		CDN-Cache-Control "no-store"
 	}
 
 	# Витрина — один статический файл, без SPA-роутинга: 404 здесь должен
