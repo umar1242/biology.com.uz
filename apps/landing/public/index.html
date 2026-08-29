@@ -9,15 +9,14 @@
 <meta property="og:description" content="Запись, оплаты, проверка домашних работ и сертификатные варианты — в одном месте. Качество заданий считается по модели Раша.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://biolog.com.uz/">
-<meta name="theme-color" content="#14111a">
+<meta name="theme-color" content="#0a0912">
 <link rel="alternate" hreflang="ru" href="https://biolog.com.uz/">
 <link rel="alternate" hreflang="uz" href="https://biolog.com.uz/uz/">
 <link rel="alternate" hreflang="x-default" href="https://biolog.com.uz/">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2314111a'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23e15b6d'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0912'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%236c3ef2'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;0,7..72,700;1,7..72,600&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
-
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -32,103 +31,83 @@
       <a href="#cert">Сертификат</a>
       <a href="#rasch">Модель Раша</a>
     </nav>
-    <div class="lang"><a href="/" aria-current="page">RU</a><a href="/uz/">UZ</a></div>
-    <a class="btn sm" href="https://t.me/Biolog1242bot">Написать нам</a>
+    <div class="topbar-right">
+      <div class="lang"><a href="/" aria-current="page">RU</a><a href="/uz/">UZ</a></div>
+      <a class="btn sm ghost" href="#offer">Получить платформу</a>
+      <a class="btn sm" href="https://t.me/Biolog1242bot">Написать нам</a>
+    </div>
   </div>
 </header>
 
 <!-- ============ первый экран ============ -->
 <section class="hero" id="top">
-  <div class="wrap hero-grid">
-    <div class="hero-copy">
-      <span class="eyebrow">Платформа для онлайн-курсов</span>
-      <h1>Курс остаётся в Телеграме. <em>Порядок</em> появляется здесь.</h1>
-      <p>Ученик записывается, получает уроки и сдаёт работы, не выходя из мессенджера. Преподаватель видит очередь проверки, оплаты и качество заданий.</p>
-      <div class="hero-actions">
-        <a class="btn" href="#offer">Получить платформу</a>
-        <a class="btn ghost" href="#features">Что она умеет</a>
-      </div>
+  <div class="arc" aria-hidden="true"></div>
+  <div class="wrap hero-in">
+    <span class="eyebrow">Платформа для онлайн-курсов</span>
+    <h1>Курс остаётся в Телеграме. <span class="accent">Порядок появляется здесь.</span></h1>
+    <p>Ученик записывается, получает уроки и сдаёт работы, не выходя из мессенджера. Преподаватель видит очередь проверки, оплаты и качество заданий.</p>
+    <div class="hero-actions">
+      <a class="btn" href="#offer">Получить платформу</a>
+      <a class="btn ghost" href="#features">Что она умеет</a>
     </div>
 
-    <div class="phone" aria-label="Экран приложения: список уроков">
-      <div class="phone-screen">
-        <div class="phone-head">
-          <div class="phone-course">Биология · 11 класс <span class="chev"></span></div>
-          <span class="eyebrow" style="letter-spacing:.1em">Уроки</span>
-        </div>
-        <table class="lessons">
-          <thead><tr><th>№</th><th>Урок</th><th>Тип</th><th>Дата</th></tr></thead>
-          <tbody>
-            <tr><td class="n">01</td><td class="name">Клетка</td><td><span class="dot dot-rec"></span>Запись</td><td>12.09</td></tr>
-            <tr><td class="n">02</td><td class="name">Митоз и мейоз</td><td><span class="dot dot-rec"></span>Запись</td><td>15.09</td></tr>
-            <tr><td class="n">03</td><td class="name">Генетика</td><td><span class="dot dot-live"></span>Live</td><td>19.09</td></tr>
-            <tr><td class="n">04</td><td class="name">Законы Менделя</td><td><span class="dot dot-rec"></span>Запись</td><td>22.09</td></tr>
-            <tr><td class="n">05</td><td class="name">Пробный вариант</td><td><span class="dot dot-live"></span>Live</td><td>26.09</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="trust">
+      <div><b>~1 мин</b><span>от ссылки до группы курса</span></div>
+      <div><b>43</b><span>задания в варианте сертификата</span></div>
+      <div><b>2</b><span>языка: русский и узбекский</span></div>
+      <div><b>0</b><span>таблиц вручную</span></div>
     </div>
   </div>
 </section>
 
-<!-- ============ полоса фактов ============ -->
-<div class="strip">
-  <div class="wrap">
-    <p class="strip-note">Работает на действующем курсе биологии и химии</p>
-    <div class="strip-in">
-      <div class="fact"><b>~1 мин</b><span>от клика по ссылке до группы курса</span></div>
-      <div class="fact"><b>43</b><span>задания в сертификатном варианте</span></div>
-      <div class="fact"><b>2</b><span>языка интерфейса: русский и узбекский</span></div>
-      <div class="fact"><b>0</b><span>таблиц, которые надо вести вручную</span></div>
-    </div>
-  </div>
-</div>
-
-<!-- ============ карточки ============ -->
+<!-- ============ возможности ============ -->
 <section id="features">
-  <div class="wrap feat">
-    <div class="feat-aside">
-      <div class="section-head">
-        <span class="eyebrow">Возможности</span>
-        <h2>Всё, чем занят преподаватель, кроме самого преподавания</h2>
-        <p>Запись, оплаты, дисциплина и проверка работ автоматизированы ровно настолько, чтобы решения остались за вами.</p>
-      </div>
-      <a class="btn ghost" href="#screens">Посмотреть экраны</a>
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Возможности</span>
+      <h2>Всё, чем занят преподаватель, <span class="accent">кроме преподавания</span></h2>
+      <p>Запись, оплаты, дисциплина и проверка работ автоматизированы ровно настолько, чтобы решения остались за вами.</p>
     </div>
 
     <div class="cards">
       <article class="card mark">
-        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5 3 11l6 3 3 6z"/></svg></div>
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <div class="ic" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5 3 11l6 3 3 6z"/></svg></div>
         <h3>Запись через бота</h3>
         <p>Ссылка курса, подтверждённый Телеграмом номер, короткая анкета — и ученик в группе. Вручную ничего переписывать не нужно.</p>
       </article>
 
       <article class="card">
-        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg></div>
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <div class="ic" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg></div>
         <h3>Уроки и модули</h3>
         <p>Расписание таблицей, живые эфиры и записи. Видео урока приходит ученику прямо в чат.</p>
       </article>
 
       <article class="card">
-        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3M8 22h8"/><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/></svg></div>
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <div class="ic" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3M8 22h8"/><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/></svg></div>
         <h3>Проверка голосом</h3>
         <p>Ученик фотографирует тетрадь, работа встаёт в очередь. Ответить голосом быстрее, чем набирать текст.</p>
       </article>
 
       <article class="card">
-        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <div class="ic" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
         <h3>Оплата и доступ</h3>
         <p>Первые уроки бесплатны. Нет оплаты — доступ замирает сам, а ученик остаётся в группе, пока вы не решите иначе.</p>
       </article>
 
       <article class="card">
-        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></div>
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <div class="ic" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></div>
         <h3>Помощники</h3>
         <p>Ассистент получает доступ только к нужным курсам и только к тем действиям, которые вы разрешили.</p>
       </article>
 
       <article class="card">
-        <div class="ic" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div>
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <div class="ic" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></div>
         <h3>Уведомления в группу</h3>
         <p>События приходят в общий чат администраторов одним форматом и с хештегами, по которым ищется история ученика.</p>
       </article>
@@ -137,11 +116,11 @@
 </section>
 
 <!-- ============ экраны ============ -->
-<section id="screens" style="background:var(--ink-deep);border-block:1px solid var(--line-soft)">
+<section id="screens">
   <div class="wrap">
-    <div class="section-head">
+    <div class="head">
       <span class="eyebrow">Как выглядит</span>
-      <h2>Два экрана, на которых держится курс</h2>
+      <h2>Три экрана, на которых <span class="accent">держится курс</span></h2>
     </div>
 
     <div class="shots">
@@ -172,33 +151,69 @@
         <div class="mock-cap"><b>Чат администраторов.</b> Одно событие — одно сообщение одного вида, с хештегами для поиска.</div>
       </div>
     </div>
+
+    <div class="mock" style="margin-top:16px">
+      <div class="mock-bar"><div class="mock-dots"><i></i><i></i><i></i></div><span>Приложение ученика</span></div>
+      <div class="mock-body" style="padding-block:22px">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="phone-head">
+              <div class="phone-course">Биология · 11 класс <span class="chev"></span></div>
+              <span class="eyebrow" style="letter-spacing:.1em">Уроки</span>
+            </div>
+            <table class="lessons">
+              <thead><tr><th>№</th><th>Урок</th><th>Тип</th><th>Дата</th></tr></thead>
+              <tbody>
+                <tr><td class="n">01</td><td class="name">Клетка</td><td><span class="dot dot-rec"></span>Запись</td><td>12.09</td></tr>
+                <tr><td class="n">02</td><td class="name">Митоз и мейоз</td><td><span class="dot dot-rec"></span>Запись</td><td>15.09</td></tr>
+                <tr><td class="n">03</td><td class="name">Генетика</td><td><span class="dot dot-live"></span>Live</td><td>19.09</td></tr>
+                <tr><td class="n">04</td><td class="name">Законы Менделя</td><td><span class="dot dot-rec"></span>Запись</td><td>22.09</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="mock-cap"><b>Список уроков.</b> Тип и дата видны сразу, живые эфиры отмечены отдельно.</div>
+    </div>
   </div>
 </section>
 
-<!-- ============ шаги ============ -->
-<section class="process" id="process">
+<!-- ============ фиолетовая полоса: запуск ============ -->
+<section class="band" id="process">
   <div class="wrap">
-    <div class="section-head">
+    <div class="head">
       <span class="eyebrow">Запуск</span>
       <h2>От первого разговора до проверенной работы</h2>
       <p>Каждый шаг начинается там, где закончился предыдущий.</p>
     </div>
 
     <div class="steps">
-      <div class="step"><span class="num">01</span><h4>Разбираем курс</h4><p>Смотрим, как вы ведёте занятия сейчас.</p></div>
-      <div class="step"><span class="num">02</span><h4>Заводим в платформе</h4><p>Модули, уроки, вариант экзамена и группа.</p></div>
-      <div class="step"><span class="num">03</span><h4>Публикуете ссылку</h4><p>Ученики записываются сами, через бота.</p></div>
-      <div class="step"><span class="num">04</span><h4>Ведёте поток</h4><p>Проверка, оплаты и напоминания идут сами.</p></div>
+      <div class="step">
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <span class="num">01</span><h4>Разбираем курс</h4><p>Смотрим, как вы ведёте занятия сейчас.</p>
+      </div>
+      <div class="step">
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <span class="num">02</span><h4>Заводим в платформе</h4><p>Модули, уроки, вариант экзамена и группа.</p>
+      </div>
+      <div class="step">
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <span class="num">03</span><h4>Публикуете ссылку</h4><p>Ученики записываются сами, через бота.</p>
+      </div>
+      <div class="step">
+        <span class="arrow" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+        <span class="num">04</span><h4>Ведёте поток</h4><p>Проверка, оплаты и напоминания идут сами.</p>
+      </div>
     </div>
   </div>
 </section>
 
 <!-- ============ сертификат ============ -->
-<section id="cert" style="background:var(--ink-deep);border-block:1px solid var(--line-soft)">
+<section id="cert">
   <div class="wrap">
-    <div class="section-head">
+    <div class="head">
       <span class="eyebrow">Milliy Sertifikat</span>
-      <h2>Вариант повторяет государственную структуру экзамена</h2>
+      <h2>Вариант повторяет <span class="accent">государственную структуру</span> экзамена</h2>
       <p>Те же группы заданий, те же веса, тот же регламент времени.</p>
     </div>
 
@@ -207,44 +222,43 @@
     </div>
 
     <div class="bands">
-      <div class="band"><span class="rng">1 — 32</span><span class="lbl">Закрытые</span><span class="sub">Варианты A–D. Проверяются по ключу автоматически.</span></div>
-      <div class="band"><span class="rng">33 — 35</span><span class="lbl">A–F</span><span class="sub">Шесть вариантов ответа.</span></div>
-      <div class="band"><span class="rng">36 — 40</span><span class="lbl">Краткий ответ</span><span class="sub">Ответ вписывается, а не выбирается.</span></div>
-      <div class="band"><span class="rng">41 — 43</span><span class="lbl">Развёрнутые</span><span class="sub">30, 35 и 10 баллов. Проверяет преподаватель.</span></div>
+      <div class="bnd"><span class="rng">1 — 32</span><span class="lbl">Закрытые</span><span class="sub">Варианты A–D. Проверяются по ключу автоматически.</span></div>
+      <div class="bnd"><span class="rng">33 — 35</span><span class="lbl">A–F</span><span class="sub">Шесть вариантов ответа.</span></div>
+      <div class="bnd"><span class="rng">36 — 40</span><span class="lbl">Краткий ответ</span><span class="sub">Ответ вписывается, а не выбирается.</span></div>
+      <div class="bnd"><span class="rng">41 — 43</span><span class="lbl">Развёрнутые</span><span class="sub">30, 35 и 10 баллов. Проверяет преподаватель.</span></div>
     </div>
 
-    <p style="margin-top:20px;font-size:13.5px;color:var(--text-faint);max-width:64ch;line-height:1.6">Решение заданий 36–43 ученик отправляет фотографией из приложения. Итоговый балл считается как в настоящем сертификате: половины весят поровну, а выше 65 баллов растёт не процент, а уровень.</p>
+    <p class="note">Решение заданий 36–43 ученик отправляет фотографией из приложения. Итоговый балл считается как в настоящем сертификате: половины весят поровну, а выше 65 баллов растёт не процент, а уровень.</p>
   </div>
 </section>
 
 <!-- ============ Раш ============ -->
-<section id="rasch">
-  <div class="wrap rasch">
-    <div>
-      <div class="section-head">
-        <span class="eyebrow">Качество заданий</span>
-        <h2>Трудность считается по модели Раша</h2>
-        <p>Задания и ученики ложатся на одну шкалу логитов, поэтому трудность перестаёт зависеть от того, в каком варианте задание стояло.</p>
-      </div>
-      <div class="bullets">
-        <div><span class="m">→</span><span><b>Трудность и погрешность</b> — оценка в логитах и стандартная ошибка.</span></div>
-        <div><span class="m">→</span><span><b>Infit и outfit</b> находят задание с двусмысленной формулировкой или ошибкой в ключе.</span></div>
-        <div><span class="m">→</span><span><b>Якорные задания</b> связывают варианты: новый ложится на ту же шкалу.</span></div>
-      </div>
+<section id="rasch" style="background:var(--ink-2);border-block:1px solid var(--line-soft)">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Качество заданий</span>
+      <h2>Трудность считается <span class="accent">по модели Раша</span></h2>
+      <p>Задания и ученики ложатся на одну шкалу логитов, поэтому трудность перестаёт зависеть от того, в каком варианте задание стояло.</p>
+    </div>
+
+    <div class="bullets">
+      <div><h4>Трудность и погрешность</h4><p>Для каждого задания — оценка в логитах и стандартная ошибка.</p></div>
+      <div><h4>Infit и outfit</h4><p>Находят задание с двусмысленной формулировкой или ошибкой в ключе.</p></div>
+      <div><h4>Якорные задания</h4><p>Связывают варианты: новый ложится на ту же шкалу, что и прошлый.</p></div>
     </div>
 
     <div class="panel">
       <div class="panel-head">Восстановление известных трудностей на модельных данных</div>
       <div class="scroll">
-      <table class="data">
-        <thead><tr><th>Учеников</th><th>Корреляция</th><th>RMSE</th><th>Заявленная SE</th></tr></thead>
-        <tbody>
-          <tr><td>10</td><td>0,788</td><td>0,898</td><td>0,887</td></tr>
-          <tr><td>30</td><td>0,932</td><td>0,505</td><td>0,491</td></tr>
-          <tr class="hi"><td>100</td><td>0,972</td><td>0,279</td><td>0,252</td></tr>
-          <tr><td>1000</td><td>0,997</td><td>0,091</td><td>0,078</td></tr>
-        </tbody>
-      </table>
+        <table class="data">
+          <thead><tr><th>Учеников</th><th>Корреляция</th><th>RMSE</th><th>Заявленная SE</th></tr></thead>
+          <tbody>
+            <tr><td>10</td><td>0,788</td><td>0,898</td><td>0,887</td></tr>
+            <tr><td>30</td><td>0,932</td><td>0,505</td><td>0,491</td></tr>
+            <tr class="hi"><td>100</td><td>0,972</td><td>0,279</td><td>0,252</td></tr>
+            <tr><td>1000</td><td>0,997</td><td>0,091</td><td>0,078</td></tr>
+          </tbody>
+        </table>
       </div>
       <div class="panel-foot">Реальная ошибка почти совпадает с заявленной: движок не занижает собственную погрешность. Пока на задание меньше 30 ответов, трудность не показывается вообще — платформа пишет, сколько ответов ещё нужно.</div>
     </div>
@@ -252,11 +266,11 @@
 </section>
 
 <!-- ============ что получает преподаватель ============ -->
-<section id="offer" style="background:var(--ink-deep);border-block:1px solid var(--line-soft)">
+<section id="offer">
   <div class="wrap">
-    <div class="section-head">
+    <div class="head">
       <span class="eyebrow">Как это получить</span>
-      <h2>Платформа передаётся преподавателю и настраивается под его курс</h2>
+      <h2>Платформа передаётся преподавателю и <span class="accent">настраивается под его курс</span></h2>
       <p>Это не аренда обезличенного сервиса: курс, материалы и ученики — ваши.</p>
     </div>
 
@@ -286,17 +300,16 @@
 </section>
 
 <!-- ============ финал ============ -->
-<div class="cta-band">
-  <div class="wrap" style="padding-block:clamp(48px,6vw,72px)">
-    <div class="cta-in">
-      <div>
-        <h2>Начинаем с одного потока</h2>
-        <p>Настройку берём на себя. Вы смотрите на своих учениках, как это работает, и решаете дальше.</p>
-      </div>
+<section class="cta">
+  <div class="wrap">
+    <h2>Начинаем с одного потока</h2>
+    <p>Настройку берём на себя. Вы смотрите на своих учениках, как это работает, и решаете дальше.</p>
+    <div class="hero-actions">
       <a class="btn" href="https://t.me/Biolog1242bot">Написать в Телеграм</a>
+      <a class="btn ghost" href="#top">Ещё раз посмотреть</a>
     </div>
   </div>
-</div>
+</section>
 
 <div class="wrap">
   <footer>
