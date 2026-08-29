@@ -90,7 +90,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--violet-lift); o
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 17px; text-decoration: none; letter-spacing: -0.03em; }
 .brand i { width: 8px; height: 8px; border-radius: 50%; background: var(--violet); box-shadow: 0 0 0 4px var(--violet-wash); }
 .nav { display: flex; gap: 22px; margin-inline: auto; }
-.nav a { text-decoration: none; color: var(--text-dim); font-size: 13.5px; font-weight: 500; transition: color .18s; }
+.nav a { text-decoration: none; color: var(--text-dim); font-size: 13.5px; font-weight: 500; white-space: nowrap; transition: color .18s; }
 .nav a:hover { color: var(--text); }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .lang { display: flex; gap: 2px; font-family: var(--mono); font-size: 11.5px; }
@@ -256,6 +256,12 @@ footer a { text-decoration: none; }
 footer a:hover { color: var(--text); }
 
 /* ---------------- узкие экраны ---------------- */
+/* Между 940 и 1150 меню ещё нужно, а две кнопки рядом с ним уже не
+   помещаются — пункты начинали переноситься на вторую строку. */
+@media (max-width: 1150px) {
+  .nav { gap: 16px; }
+  .topbar-right .btn.ghost { display: none; }
+}
 @media (max-width: 940px) {
   .nav { display: none; }
   .cards, .steps, .bullets { grid-template-columns: repeat(2, 1fr); }
