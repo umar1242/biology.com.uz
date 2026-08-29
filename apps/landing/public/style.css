@@ -145,6 +145,20 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--violet-lift); o
 .card.mark p { color: rgba(255,255,255,.82); }
 .card.mark .arrow { color: rgba(255,255,255,.7); }
 
+/* ---------------- блок про рутину ---------------- */
+.story { max-width: 58ch; margin: 34px auto 0; }
+.story p { color: var(--text-dim); font-size: 15.5px; }
+.story ul { margin: 18px 0 0; display: flex; flex-direction: column; gap: 10px; }
+.story li { position: relative; padding-left: 22px; color: var(--text-dim); font-size: 15px; }
+.story li::before { content: ""; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--violet); }
+.story .out { margin-top: 22px; color: var(--text); font-weight: 700; font-size: 16.5px; }
+
+/* Вторая строка карточки — что преподаватель получает. Отделена цветом,
+   а не подписью-ярлыком: ярлык на трёх карточках из шести выглядел бы
+   как недоделанная таблица. */
+.card .res { color: var(--text); }
+.card.mark .res { color: #fff; }
+
 /* ---------------- фиолетовая полоса с шагами ---------------- */
 .band { background: linear-gradient(150deg, var(--violet-deep) 0%, var(--violet) 55%, #5a2ce4 100%); }
 .band .head h2, .band .head p { color: #fff; }
