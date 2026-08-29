@@ -2,14 +2,16 @@ import type { FastifyPluginAsync } from "fastify";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/client.js";
-import { staffUsers, teachers } from "../db/schema.js";
+import { staffNotificationGroups, staffUsers, teachers } from "../db/schema.js";
 import { requireAuth, requireTeacher } from "../plugins/auth.js";
 import { Forbidden, Unprocessable } from "../lib/errors.js";
 import { createPendingActionDeepLink } from "../telegram/pendingActions.js";
+import { languageForStaffNotifications } from "../lib/language.js";
 
 const updateSettingsSchema = z.object({
   penalty_point_threshold: z.number().int().positive().optional(),
   language: z.enum(["ru", "uz"]).optional(),
+  notification_language: z.enum(["ru", "uz"]).optional(),
 });
 
 const settingsRoutes: FastifyPluginAsync = async (app) => {
@@ -22,11 +24,22 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
       .limit(1);
 
     const [staff] = await db.select().from(staffUsers).where(eq(staffUsers.id, auth.staffId)).limit(1);
+    const [group] = await db
+      .select()
+      .from(staffNotificationGroups)
+      .where(eq(staffNotificationGroups.teacherId, auth.teacherId))
+      .limit(1);
 
     return {
       penalty_point_threshold: teacher.penaltyPointThreshold,
       notifications_linked: !!staff?.notificationTelegramId,
+      notification_group_linked: !!group,
+      notification_group_title: group?.title ?? null,
       language: staff?.language ?? "ru",
+      // The effective language, not the raw column: an assistant opening
+      // this page must see what the group actually speaks, and NULL there
+      // means "whatever the teacher's panel is set to".
+      notification_language: await languageForStaffNotifications(auth.teacherId),
     };
   });
 
@@ -34,7 +47,11 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
     const auth = requireAuth(request);
     const body = updateSettingsSchema.safeParse(request.body);
     if (!body.success) throw Unprocessable(body.error.message);
-    if (body.data.penalty_point_threshold === undefined && body.data.language === undefined) {
+    if (
+      body.data.penalty_point_threshold === undefined &&
+      body.data.language === undefined &&
+      body.data.notification_language === undefined
+    ) {
       throw Unprocessable("No fields to update");
     }
 
@@ -55,6 +72,16 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
         .where(eq(teachers.staffUserId, auth.teacherId));
     }
 
+    // Teacher-only for the same reason as the group itself: it changes the
+    // language of everyone's feed, not the caller's own interface.
+    if (body.data.notification_language !== undefined) {
+      if (auth.role !== "teacher") throw Forbidden("Only the course-owning teacher can do this");
+      await db
+        .update(teachers)
+        .set({ notificationLanguage: body.data.notification_language })
+        .where(eq(teachers.staffUserId, auth.teacherId));
+    }
+
     const [teacher] = await db
       .select()
       .from(teachers)
@@ -64,6 +91,7 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
     return {
       penalty_point_threshold: teacher?.penaltyPointThreshold,
       language: staff?.language ?? "ru",
+      notification_language: await languageForStaffNotifications(auth.teacherId),
     };
   });
 
@@ -77,6 +105,24 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
       targetStaffId: auth.staffId,
     });
     return { deep_link: deepLink };
+  });
+
+  // The shared admin group: one per teacher, so alerts reach assistants too
+  // instead of sitting in one person's DMs. Teacher-only, like the penalty
+  // threshold — it redirects everyone's notifications, not just your own.
+  app.post("/settings/notifications/group-link-start", async (request) => {
+    const auth = requireTeacher(request);
+    const deepLink = await createPendingActionDeepLink({
+      actionType: "link_staff_group",
+      targetStaffId: auth.teacherId,
+    });
+    return { deep_link: deepLink };
+  });
+
+  app.delete("/settings/notifications/group", async (request) => {
+    const auth = requireTeacher(request);
+    await db.delete(staffNotificationGroups).where(eq(staffNotificationGroups.teacherId, auth.teacherId));
+    return { ok: true };
   });
 };
 

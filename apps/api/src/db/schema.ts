@@ -74,6 +74,10 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "blacklist_event",
   "unreviewed_homework_summary",
   "trial_expired",
+  "application_submitted",
+  "cert_attempt_submitted",
+  "student_removed",
+  "group_invite_failed",
 ]);
 export const botPendingActionTypeEnum = pgEnum("bot_pending_action_type", [
   "attach_lesson_recording",
@@ -84,6 +88,7 @@ export const botPendingActionTypeEnum = pgEnum("bot_pending_action_type", [
   "attach_cert_variant",
   "submit_cert_task",
   "course_application",
+  "link_staff_group",
 ]);
 
 // ---------------------------------------------------------------------
@@ -119,7 +124,31 @@ export const teachers = pgTable("teachers", {
     .primaryKey()
     .references(() => staffUsers.id),
   penaltyPointThreshold: integer("penalty_point_threshold").notNull().default(3),
+  // Language of the staff notification feed. Deliberately separate from the
+  // teacher's own interface language (staff_users.language): the admin group
+  // is read by assistants too, so which language it speaks is a property of
+  // the group, not of whoever last clicked a flag in the panel.
+  // NULL = follow the teacher's interface language, which is what everyone
+  // had before this column existed.
+  notificationLanguage: languageEnum("notification_language"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * The Telegram group the platform's staff notifications go to — one per
+ * teacher. Alerts used to be a DM to whoever linked notifications, which
+ * meant an assistant covering for the teacher simply never saw them. The
+ * group is the shared inbox; the personal DM stays as a fallback for a
+ * teacher who has not linked one (see telegram/notify.ts).
+ */
+export const staffNotificationGroups = pgTable("staff_notification_groups", {
+  teacherId: bigint("teacher_id", { mode: "number" })
+    .primaryKey()
+    .references(() => teachers.staffUserId),
+  telegramChatId: bigint("telegram_chat_id", { mode: "number" }).notNull().unique(),
+  title: text("title"),
+  linkedByStaffId: bigint("linked_by_staff_id", { mode: "number" }).references(() => staffUsers.id),
+  linkedAt: timestamp("linked_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const assistants = pgTable(

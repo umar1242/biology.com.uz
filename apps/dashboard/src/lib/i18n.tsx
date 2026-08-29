@@ -546,8 +546,39 @@ const STRINGS = {
   connected: { ru: "Подключены", uz: "Ulangan" },
   notConnected: { ru: "Не подключены", uz: "Ulanmagan" },
   notificationsDescription: {
-    ru: "Бот будет присылать вам события: истечение доступа, блокировки учеников, сводку непроверенных ДЗ.",
-    uz: "Bot sizga voqealarni yuboradi: ruxsat muddati tugashi, o'quvchilar bloklanishi, tekshirilmagan vazifalar xulosasi.",
+    ru: "Запасной канал: если группа не подключена, уведомления придут вам в личные сообщения.",
+    uz: "Zaxira kanal: guruh ulanmagan bo'lsa, bildirishnomalar shaxsiy xabarlaringizga keladi.",
+  },
+  notificationGroup: { ru: "Группа уведомлений", uz: "Bildirishnomalar guruhi" },
+  notificationGroupDescription: {
+    ru:
+      "Все события платформы — новые анкеты, конец пробного периода, истечение доступа, сданные работы — " +
+      "приходят в общую группу, а не в личку. Так их видят и помощники.",
+    uz:
+      "Platformaning barcha voqealari — yangi anketalar, sinov muddati tugashi, ruxsat tugashi, topshirilgan ishlar — " +
+      "shaxsiy xabarga emas, umumiy guruhga keladi. Shunda yordamchilar ham ko'radi.",
+  },
+  notificationGroupHint: {
+    ru: "Откройте ссылку в Telegram, добавьте бота в группу администраторов и отправьте там команду /link_…",
+    uz: "Havolani Telegramda oching, botni adminlar guruhiga qo'shing va u yerda /link_… buyrug'ini yuboring.",
+  },
+  notificationGroupTeacherOnly: {
+    ru: "Подключить группу может только преподаватель — она общая для всех помощников.",
+    uz: "Guruhni faqat o'qituvchi ulay oladi — u barcha yordamchilar uchun umumiy.",
+  },
+  notificationGroupTags: {
+    ru: "Поиск внутри группы: #student_12 — история ученика, #course_3 — курс, #biolog_admin — вся лента.",
+    uz: "Guruh ichida qidiruv: #student_12 — o'quvchi tarixi, #course_3 — kurs, #biolog_admin — butun lenta.",
+  },
+  disconnect: { ru: "Отключить", uz: "Uzish" },
+  notificationLanguage: { ru: "Язык уведомлений", uz: "Bildirishnomalar tili" },
+  notificationLanguageHint: {
+    ru: "На каком языке бот пишет в группу. Язык панели при этом не меняется — группу читают и помощники.",
+    uz: "Bot guruhga qaysi tilda yozadi. Panel tili o'zgarmaydi — guruhni yordamchilar ham o'qiydi.",
+  },
+  notificationLanguageTeacherOnly: {
+    ru: "Язык уведомлений меняет только преподаватель — он общий для всей группы.",
+    uz: "Bildirishnomalar tilini faqat o'qituvchi o'zgartiradi — u butun guruh uchun umumiy.",
   },
   connect: { ru: "Подключить", uz: "Ulash" },
   notificationsLinkHint: {

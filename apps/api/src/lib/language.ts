@@ -1,6 +1,6 @@
 import { eq, or } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { staffUsers, students } from "../db/schema.js";
+import { staffUsers, students, teachers } from "../db/schema.js";
 import type { Language } from "./i18n.js";
 
 /**
@@ -41,4 +41,23 @@ export async function languageForStaff(staffId: number): Promise<Language> {
     .where(eq(staffUsers.id, staffId))
     .limit(1);
   return row?.language ?? "ru";
+}
+
+/**
+ * Language of the staff notification feed. The teacher's explicit choice
+ * wins; without one it follows their interface language, which is how this
+ * worked before the setting existed.
+ *
+ * Separate from `languageForStaff` on purpose: the admin group is shared
+ * with assistants, so its language is a property of the group, not of the
+ * person who happens to be reading the panel.
+ */
+export async function languageForStaffNotifications(teacherId: number): Promise<Language> {
+  const [row] = await db
+    .select({ chosen: teachers.notificationLanguage, fallback: staffUsers.language })
+    .from(teachers)
+    .innerJoin(staffUsers, eq(staffUsers.id, teachers.staffUserId))
+    .where(eq(teachers.staffUserId, teacherId))
+    .limit(1);
+  return row?.chosen ?? row?.fallback ?? "ru";
 }

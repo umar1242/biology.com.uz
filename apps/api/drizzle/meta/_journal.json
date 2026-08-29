@@ -99,6 +99,20 @@
       "when": 1787870000000,
       "tag": "0013_rasch_calibration",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787880000000,
+      "tag": "0014_staff_notification_group",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787890000000,
+      "tag": "0015_notification_language",
+      "breakpoints": true
     }
   ]
 }

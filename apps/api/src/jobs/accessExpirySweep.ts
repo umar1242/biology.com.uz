@@ -1,9 +1,7 @@
 import { and, eq, lte } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { courseAccess, courses } from "../db/schema.js";
-import { notifyStaff, wasNotifiedRecently } from "../telegram/notify.js";
-import { formatDate, formatDateTime, t } from "../lib/i18n.js";
-import { languageForStaff, languageForStudent } from "../lib/language.js";
+import { alertStaff, wasNotifiedRecently } from "../telegram/notify.js";
 
 const ADVANCE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000; // idea-platforma-kursy.md §8: warn ~3 days ahead
 const DEDUPE_ADVANCE_MS = 24 * 60 * 60 * 1000; // at most one advance warning per day
@@ -41,17 +39,14 @@ export async function runAccessExpirySweep(): Promise<void> {
     });
     if (already) continue;
 
-    const lang = await languageForStaff(access.teacherId);
-    await notifyStaff({
+    await alertStaff({
       staffId: access.teacherId,
-      notificationType,
       courseId: access.courseId,
-      text: t(lang, expired ? "notifyAccessExpired" : "notifyAccessExpiring", {
-        student: access.studentId,
-        course: courseTitle,
-        date: formatDate(lang, access.expiresAt),
-      }),
+      studentId: access.studentId,
       payload: { access_id: access.id },
+      alert: expired
+        ? { kind: "access_expired", expiresAt: access.expiresAt }
+        : { kind: "access_expiring", expiresAt: access.expiresAt },
     });
   }
 }

@@ -8,9 +8,7 @@ import {
   modules,
 } from "../db/schema.js";
 import { isTrialExhausted, lessonsConsumedSince } from "../lib/trial.js";
-import { notifyStaff } from "../telegram/notify.js";
-import { t } from "../lib/i18n.js";
-import { languageForStaff } from "../lib/language.js";
+import { alertStaff } from "../telegram/notify.js";
 
 /**
  * Freezes students whose free trial has been used up without payment.
@@ -24,7 +22,7 @@ import { languageForStaff } from "../lib/language.js";
  */
 export async function runTrialExpirySweep(): Promise<void> {
   const rows = await db
-    .select({ access: courseAccess, courseTitle: courses.title, allowance: courses.trialLessonCount })
+    .select({ access: courseAccess, allowance: courses.trialLessonCount })
     .from(courseAccess)
     .innerJoin(courses, eq(courses.id, courseAccess.courseId))
     .where(
@@ -52,7 +50,7 @@ export async function runTrialExpirySweep(): Promise<void> {
     publishedByCourse.set(row.courseId, list);
   }
 
-  for (const { access, courseTitle, allowance } of rows) {
+  for (const { access, allowance } of rows) {
     // A trial row without a start date can't be measured — leave it alone
     // rather than guessing and freezing someone who just signed up.
     if (!access.trialStartedAt) continue;
@@ -82,13 +80,12 @@ export async function runTrialExpirySweep(): Promise<void> {
     // Outside the transaction on purpose — a Telegram hiccup must not roll
     // back a freeze that already happened. The next sweep won't re-notify:
     // the row is no longer in the selection above.
-    const lang = await languageForStaff(access.teacherId);
-    await notifyStaff({
+    await alertStaff({
       staffId: access.teacherId,
-      notificationType: "trial_expired",
       courseId: access.courseId,
-      text: t(lang, "notifyTrialExpired", { student: access.studentId, course: courseTitle }),
+      studentId: access.studentId,
       payload: { access_id: access.id, lessons_consumed: consumed },
+      alert: { kind: "trial_expired", lessonsConsumed: consumed, allowance },
     });
   }
 }

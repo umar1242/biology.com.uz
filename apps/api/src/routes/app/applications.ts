@@ -13,6 +13,7 @@ import { requireStudentAuth } from "../../plugins/studentAuth.js";
 import { AppError, Conflict, NotFound, Unprocessable } from "../../lib/errors.js";
 import { inviteStudentToCourseGroup } from "../../telegram/groupMembership.js";
 import { applicationTargetFor } from "../../lib/studentOnboarding.js";
+import { alertStaff } from "../../telegram/notify.js";
 
 // Uzbek numbers are entered in several shapes (+998 90 123 45 67, 909…,
 // with or without spaces/dashes), so validate on digits rather than a strict
@@ -269,6 +270,25 @@ const appApplicationRoutes: FastifyPluginAsync = async (app) => {
         "application accepted but course group invite could not be sent",
       );
     }
+
+    // The teacher learns about a new student here and nowhere else in real
+    // time — before this, an application only showed up if someone happened
+    // to open the dashboard. The invite outcome rides along in the same
+    // message: whether the student actually got into the group is the first
+    // thing anyone asks next.
+    await alertStaff({
+      staffId: course.teacherId,
+      courseId,
+      studentId: auth.studentId,
+      alert: {
+        kind: "application_submitted",
+        phone: body.data.phone,
+        parentPhone: body.data.parent_phone_primary,
+        parentPhoneSecondary: body.data.parent_phone_secondary || null,
+        aboutSelf: body.data.about_self || null,
+        inviteSent: invited,
+      },
+    });
 
     reply.code(201).send({ ok: true, invite_sent: invited });
   });

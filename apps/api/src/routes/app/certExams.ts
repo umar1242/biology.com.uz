@@ -17,6 +17,7 @@ import { assertNotFrozen, loadStudentAccessibleCourse } from "../../lib/studentA
 import { createPendingActionDeepLink } from "../../telegram/pendingActions.js";
 import { fetchTelegramFile } from "../../telegram/client.js";
 import { bot } from "../../telegram/bot.js";
+import { alertStaff } from "../../telegram/notify.js";
 import { students } from "../../db/schema.js";
 import { Conflict, NotFound, Unprocessable } from "../../lib/errors.js";
 import {
@@ -442,6 +443,17 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
           autoScore,
         })
         .where(eq(certExamAttempts.id, attempt.id));
+    });
+
+    // The open half (36–43) is graded by hand, so a submitted attempt is
+    // work waiting on a person. Outside the transaction — a Telegram hiccup
+    // must not roll back an attempt the student has already finished.
+    await alertStaff({
+      staffId: exam.teacherId,
+      courseId: exam.courseId,
+      studentId: auth.studentId,
+      payload: { attempt_id: attempt.id },
+      alert: { kind: "cert_attempt_submitted", examTitle: exam.title, isLate: now > exam.deadlineAt },
     });
 
     // autoScore is stored but deliberately NOT returned here, and GET keeps

@@ -19,7 +19,7 @@ import { requireAuth } from "../plugins/auth.js";
 import { accessibleCourseIds, loadAccessibleCourse, requireCourseCapability } from "../lib/access.js";
 import { Conflict, NotFound, Unprocessable } from "../lib/errors.js";
 import { inviteStudentToCourseGroup, removeStudentFromCourseGroup } from "../telegram/groupMembership.js";
-import { notifyStaff } from "../telegram/notify.js";
+import { alertStaff } from "../telegram/notify.js";
 
 async function getStudentTelegramId(studentId: number): Promise<number | null> {
   const [row] = await db.select({ telegramId: students.telegramId }).from(students).where(eq(students.id, studentId)).limit(1);
@@ -219,6 +219,22 @@ const studentRoutes: FastifyPluginAsync = async (app) => {
         removed,
         ...(removed ? {} : { reason: "telegram_error" }),
       });
+
+      // One alert per student, not one per batch: the point of the admin
+      // group is that `#student_12` shows that student's whole history, and
+      // a lumped-together list would not appear under any of their tags.
+      await alertStaff({
+        staffId: auth.teacherId,
+        courseId,
+        studentId,
+        payload: { access_id: access.id },
+        alert: {
+          kind: "student_removed",
+          actor: auth.displayName,
+          removed,
+          failureReason: removed ? null : "telegram_error",
+        },
+      });
     }
 
     return { results };
@@ -304,8 +320,18 @@ const studentRoutes: FastifyPluginAsync = async (app) => {
     // Bots can't add a user to a group directly — this DMs the invite link.
     // Awaited but errors are swallowed inside the helper (returns false) —
     // a delivery failure (e.g. student never started the bot) shouldn't
-    // fail the access grant itself, which already succeeded.
-    await inviteStudentToCourseGroup(courseId, student.telegramId, student.id);
+    // fail the access grant itself, which already succeeded. It must still
+    // be reported: a student with access but no group is invisibly stuck,
+    // and until now the failure went nowhere at all.
+    const invited = await inviteStudentToCourseGroup(courseId, student.telegramId, student.id);
+    if (!invited) {
+      await alertStaff({
+        staffId: auth.teacherId,
+        courseId,
+        studentId: student.id,
+        alert: { kind: "group_invite_failed", context: "access_granted" },
+      });
+    }
 
     return access;
   });
@@ -480,12 +506,11 @@ const studentRoutes: FastifyPluginAsync = async (app) => {
     const telegramId = await getStudentTelegramId(studentId);
     if (telegramId) await removeStudentFromCourseGroup(courseId, telegramId);
 
-    const [course] = await db.select({ title: courses.title }).from(courses).where(eq(courses.id, courseId)).limit(1);
-    await notifyStaff({
+    await alertStaff({
       staffId: auth.teacherId,
-      notificationType: "blacklist_event",
       courseId,
-      text: `🚫 Ученик #${studentId} заблокирован на курсе «${course?.title ?? courseId}»${body.data.reason ? `: ${body.data.reason}` : ""}`,
+      studentId,
+      alert: { kind: "blacklisted", auto: false, reason: body.data.reason },
     });
 
     return { is_blacklisted: true };

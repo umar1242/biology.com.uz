@@ -1,9 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { homeworkSubmissions } from "../db/schema.js";
-import { notifyStaff, wasNotifiedRecently } from "../telegram/notify.js";
-import { formatDate, formatDateTime, t } from "../lib/i18n.js";
-import { languageForStaff, languageForStudent } from "../lib/language.js";
+import { alertStaff, wasNotifiedRecently } from "../telegram/notify.js";
 
 const DEDUPE_MS = 20 * 60 * 60 * 1000; // roughly once/day per teacher
 
@@ -27,12 +25,10 @@ export async function runUnreviewedHomeworkDigest(): Promise<void> {
     });
     if (already) continue;
 
-    const lang = await languageForStaff(row.teacherId);
-    await notifyStaff({
+    await alertStaff({
       staffId: row.teacherId,
-      notificationType: "unreviewed_homework_summary",
-      text: t(lang, "notifyUnreviewedDigest", { count: row.count }),
       payload: { digest: 1 },
+      alert: { kind: "unreviewed_homework", count: row.count },
     });
   }
 }

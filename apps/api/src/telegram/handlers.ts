@@ -15,6 +15,7 @@ import {
   homeworkSubmissions,
   homeworks,
   lessons,
+  staffNotificationGroups,
   staffUsers,
   students,
   teachers,
@@ -23,6 +24,7 @@ import { hashPassword } from "../auth/password.js";
 import { loadStudentAccessibleHomeworkContext } from "../lib/studentAccess.js";
 import { t, type Language } from "../lib/i18n.js";
 import { isClosedTask } from "../lib/certExam.js";
+import { UMBRELLA_TAG } from "../lib/staffAlerts.js";
 import { languageForTelegramUser } from "../lib/language.js";
 import { config } from "../config.js";
 import { bot } from "./bot.js";
@@ -277,6 +279,8 @@ async function claimPendingAction(
     await ctx.reply(t(lang, "sendPhotos"));
   } else if (pending.actionType === "link_course_group") {
     await ctx.reply(t(lang, "linkGroupInstructions", { token }));
+  } else if (pending.actionType === "link_staff_group") {
+    await ctx.reply(t(lang, "linkStaffGroupInstructions", { token }));
   } else if (pending.actionType === "link_staff_notifications" && pending.targetStaffId) {
     // Completes immediately — no follow-up media message needed, unlike
     // the other pending-action types.
@@ -637,30 +641,61 @@ bot.hears(/^\/link_([a-f0-9]+)/, async (ctx) => {
     .where(eq(botPendingActions.token, token))
     .limit(1);
 
-  if (
-    !pending ||
-    pending.actionType !== "link_course_group" ||
-    pending.consumedAt ||
-    pending.expiresAt < new Date() ||
-    !pending.targetCourseId
-  ) {
+  const usable =
+    pending &&
+    !pending.consumedAt &&
+    pending.expiresAt >= new Date() &&
+    ((pending.actionType === "link_course_group" && pending.targetCourseId) ||
+      (pending.actionType === "link_staff_group" && pending.targetStaffId));
+  if (!pending || !usable) {
     await ctx.reply(t(lang, "linkInvalid"));
     return;
   }
 
-  await db
-    .insert(courseTelegramGroups)
-    .values({ courseId: pending.targetCourseId, telegramChatId: ctx.chat.id })
-    .onConflictDoUpdate({
-      target: courseTelegramGroups.courseId,
-      set: { telegramChatId: ctx.chat.id, botIsMember: true, linkedAt: new Date() },
-    });
+  if (pending.actionType === "link_course_group" && pending.targetCourseId) {
+    await db
+      .insert(courseTelegramGroups)
+      .values({ courseId: pending.targetCourseId, telegramChatId: ctx.chat.id })
+      .onConflictDoUpdate({
+        target: courseTelegramGroups.courseId,
+        set: { telegramChatId: ctx.chat.id, botIsMember: true, linkedAt: new Date() },
+      });
+  } else if (pending.actionType === "link_staff_group" && pending.targetStaffId) {
+    const title = "title" in ctx.chat ? ctx.chat.title : null;
+    // A chat can only be one teacher's inbox (telegram_chat_id is UNIQUE),
+    // so an existing claim on this chat is released first — otherwise
+    // re-linking a group to a different teacher would fail on the index
+    // with nothing to tell the user why.
+    await db
+      .delete(staffNotificationGroups)
+      .where(eq(staffNotificationGroups.telegramChatId, ctx.chat.id));
+    await db
+      .insert(staffNotificationGroups)
+      .values({
+        teacherId: pending.targetStaffId,
+        telegramChatId: ctx.chat.id,
+        title,
+        linkedByStaffId: pending.targetStaffId,
+      })
+      .onConflictDoUpdate({
+        target: staffNotificationGroups.teacherId,
+        set: { telegramChatId: ctx.chat.id, title, linkedAt: new Date() },
+      });
+  }
+
   await db
     .update(botPendingActions)
     .set({ telegramId: ctx.chat.id, claimedAt: new Date(), consumedAt: new Date() })
     .where(eq(botPendingActions.id, pending.id));
 
-  await ctx.reply(t(lang, "groupLinked"));
+  if (pending.actionType === "link_staff_group") {
+    // Sent through the same HTML template family as the alerts themselves,
+    // so the very first message in the group already shows what the feed
+    // will look like and how to search it.
+    await ctx.reply(t(lang, "staffGroupLinked", { umbrella: UMBRELLA_TAG }), { parse_mode: "HTML" });
+  } else {
+    await ctx.reply(t(lang, "groupLinked"));
+  }
 });
 
 // ---------------------------------------------------------------------

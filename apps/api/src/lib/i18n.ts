@@ -134,19 +134,7 @@ const STRINGS = {
   noTeachers: { ru: "Учителей пока нет.", uz: "Hozircha o'qituvchilar yo'q." },
   teacherInactive: { ru: " (неактивен)", uz: " (faol emas)" },
 
-  // --- notifications from jobs ---
-  notifyAccessExpired: {
-    ru: "⏰ Доступ ученика #{student} к курсу «{course}» истёк {date} и ещё не отозван.",
-    uz: "⏰ #{student} o'quvchining «{course}» kursiga ruxsati {date} da tugadi va hali bekor qilinmagan.",
-  },
-  notifyAccessExpiring: {
-    ru: "⏳ Доступ ученика #{student} к курсу «{course}» истекает {date}.",
-    uz: "⏳ #{student} o'quvchining «{course}» kursiga ruxsati {date} da tugaydi.",
-  },
-  notifyAutoBlacklist: {
-    ru: "🚫 Ученик #{student} автоматически заблокирован на курсе «{course}» — достигнут порог штрафных баллов.",
-    uz: "🚫 #{student} o'quvchi «{course}» kursida avtomatik bloklandi — jarima ballari chegarasiga yetdi.",
-  },
+  // --- notifications to students ---
   notifyLiveLesson: {
     ru: "🔴 Live-урок «{lesson}» начинается в {time}.",
     uz: "🔴 «{lesson}» jonli darsi {time} da boshlanadi.",
@@ -158,10 +146,6 @@ const STRINGS = {
   notifyHomeworkDeadline: {
     ru: "⏰ Напоминание: дедлайн по заданию «{lesson}» — {time}. Не забудьте сдать!",
     uz: "⏰ Eslatma: «{lesson}» vazifasi muddati — {time}. Topshirishni unutmang!",
-  },
-  notifyUnreviewedDigest: {
-    ru: "📋 У вас {count} непроверенных домашних заданий.",
-    uz: "📋 Sizda {count} ta tekshirilmagan uy vazifasi bor.",
   },
   notifyCourseInvite: {
     ru: "Вам открыт доступ к курсу. Присоединяйтесь к группе курса: {link}",
@@ -199,15 +183,115 @@ const STRINGS = {
     ru: "Вы уже подали анкету на курс «{course}».",
     uz: "Siz «{course}» kursiga allaqachon anketa topshirgansiz.",
   },
-  notifyTrialExpired: {
+  // --- staff notification group linking ---
+  linkStaffGroupInstructions: {
     ru:
-      "🔔 У ученика #{student} закончился пробный период на курсе «{course}» — оплаты нет.\n" +
-      "Доступ в приложении приостановлен, из группы НЕ удалён. " +
-      "Отчислить можно в разделе «Отчисление».",
+      "Готово. Теперь добавьте бота в группу администраторов и отправьте там команду:\n/link_{token}\n\n" +
+      "После этого все уведомления платформы будут приходить в эту группу, а не в личные сообщения.",
     uz:
-      "🔔 #{student} o'quvchining «{course}» kursidagi sinov muddati tugadi — to'lov yo'q.\n" +
-      "Ilovadagi ruxsat to'xtatildi, guruhdan O'CHIRILMADI. " +
-      "«Chiqarish» bo'limida chiqarish mumkin.",
+      "Tayyor. Endi botni adminlar guruhiga qo'shing va u yerda buyruqni yuboring:\n/link_{token}\n\n" +
+      "Shundan so'ng platformaning barcha bildirishnomalari shaxsiy xabarlarga emas, shu guruhga keladi.",
+  },
+  staffGroupLinked: {
+    ru:
+      "✅ <b>Группа уведомлений подключена</b>\n" +
+      "Сюда будут приходить все уведомления платформы.\n\n" +
+      "Поиск по хештегам: #student_12 — история одного ученика, #course_3 — один курс, " +
+      "{umbrella} — вся лента.",
+    uz:
+      "✅ <b>Bildirishnoma guruhi ulandi</b>\n" +
+      "Platformaning barcha bildirishnomalari shu yerga keladi.\n\n" +
+      "Xeshteg bo'yicha qidiruv: #student_12 — bitta o'quvchi tarixi, #course_3 — bitta kurs, " +
+      "{umbrella} — butun lenta.",
+  },
+  staffGroupOnlyTeacher: {
+    ru: "Подключить группу уведомлений может только преподаватель — владелец курсов.",
+    uz: "Bildirishnoma guruhini faqat kurslar egasi — o'qituvchi ulay oladi.",
+  },
+
+  // --- staff alerts: headlines ---
+  alertTitleApplication: { ru: "Новая анкета на курс", uz: "Kursga yangi anketa" },
+  alertTitleInviteFailed: { ru: "Не удалось пригласить в группу", uz: "Guruhga taklif yuborilmadi" },
+  alertTitleTrialExpired: { ru: "Пробный период закончился", uz: "Sinov muddati tugadi" },
+  alertTitleAccessExpiring: { ru: "Доступ скоро истекает", uz: "Ruxsat muddati tugayapti" },
+  alertTitleAccessExpired: { ru: "Доступ истёк", uz: "Ruxsat muddati tugadi" },
+  alertTitleCertAttempt: { ru: "Сертификатная работа сдана", uz: "Sertifikat ishi topshirildi" },
+  alertTitleUnreviewed: { ru: "Непроверенные домашние работы", uz: "Tekshirilmagan uy ishlari" },
+  alertTitleBlacklisted: { ru: "Ученик заблокирован", uz: "O'quvchi bloklandi" },
+  alertTitleRemoved: { ru: "Отчисление из группы", uz: "Guruhdan chiqarish" },
+
+  // --- staff alerts: row labels ---
+  alertRowStudent: { ru: "Ученик", uz: "O'quvchi" },
+  alertRowCourse: { ru: "Курс", uz: "Kurs" },
+  alertRowPhone: { ru: "Телефон", uz: "Telefon" },
+  alertRowParentPhone: { ru: "Родители", uz: "Ota-ona" },
+  alertRowAbout: { ru: "О себе", uz: "O'zi haqida" },
+  alertRowInvite: { ru: "Приглашение", uz: "Taklif" },
+  alertRowContext: { ru: "Момент", uz: "Holat" },
+  alertRowLessons: { ru: "Уроки", uz: "Darslar" },
+  alertRowState: { ru: "Состояние", uz: "Holati" },
+  alertRowExpiresAt: { ru: "Истекает", uz: "Tugaydi" },
+  alertRowExpiredAt: { ru: "Истёк", uz: "Tugagan" },
+  alertRowExam: { ru: "Экзамен", uz: "Imtihon" },
+  alertRowStatus: { ru: "Отметка", uz: "Belgi" },
+  alertRowPending: { ru: "Ждут проверки", uz: "Tekshiruv kutmoqda" },
+  alertRowSource: { ru: "Источник", uz: "Manba" },
+  alertRowReason: { ru: "Причина", uz: "Sabab" },
+  alertRowActor: { ru: "Кто нажал", uz: "Kim bosdi" },
+  alertRowResult: { ru: "Результат", uz: "Natija" },
+
+  // --- staff alerts: row values ---
+  alertInviteSent: { ru: "ссылка на группу отправлена", uz: "guruh havolasi yuborildi" },
+  alertInviteNotSent: { ru: "ссылку отправить не удалось", uz: "havola yuborilmadi" },
+  alertContextApplication: { ru: "сразу после анкеты", uz: "anketadan keyin darhol" },
+  alertContextAccessGranted: { ru: "при выдаче доступа", uz: "ruxsat berilganda" },
+  alertLessonsOfFree: { ru: "{used} пройдено, бесплатных {free}", uz: "{used} o'tildi, bepul {free}" },
+  alertStateFrozen: {
+    ru: "доступ в приложении приостановлен, из группы не удалён",
+    uz: "ilovadagi ruxsat to'xtatildi, guruhdan o'chirilmadi",
+  },
+  alertLate: { ru: "сдано после дедлайна", uz: "muddatdan keyin topshirilgan" },
+  alertSourceAuto: { ru: "автоматически, по штрафным баллам", uz: "avtomatik, jarima ballari bo'yicha" },
+  alertSourceManual: { ru: "вручную из дашборда", uz: "dashboarddan qo'lda" },
+  alertRemovedOk: { ru: "удалён из группы", uz: "guruhdan o'chirildi" },
+  alertRemovedFailed: { ru: "удалить не удалось ({reason})", uz: "o'chirib bo'lmadi ({reason})" },
+
+  // --- staff alerts: what to do next ---
+  alertActionApplication: {
+    ru: "Проверьте анкету в разделе «Ученики». Пробный период уже идёт.",
+    uz: "Anketani «O'quvchilar» bo'limida ko'ring. Sinov muddati boshlandi.",
+  },
+  alertActionInviteFailed: {
+    ru: "Проверьте, что бот добавлен в группу курса и может создавать ссылки-приглашения.",
+    uz: "Bot kurs guruhiga qo'shilganini va taklif havolasi yarata olishini tekshiring.",
+  },
+  alertActionTrialExpired: {
+    ru: "Дождитесь оплаты или отчислите из группы в разделе «Отчисление».",
+    uz: "To'lovni kuting yoki «Chiqarish» bo'limida guruhdan chiqaring.",
+  },
+  alertActionAccessExpiring: {
+    ru: "Продлите доступ в карточке ученика, если оплата продолжается.",
+    uz: "To'lov davom etsa, o'quvchi kartasida ruxsatni uzaytiring.",
+  },
+  alertActionAccessExpired: {
+    ru: "Доступ сам не отзывается — продлите или отзовите его вручную.",
+    uz: "Ruxsat o'zi bekor bo'lmaydi — uzaytiring yoki qo'lda bekor qiling.",
+  },
+  alertActionCertAttempt: {
+    ru: "Откройте работу в разделе «Сертификат» и проверьте открытые задания.",
+    uz: "Ishni «Sertifikat» bo'limida oching va ochiq topshiriqlarni tekshiring.",
+  },
+  alertActionUnreviewed: {
+    ru: "Проверьте работы в разделе «Домашние задания».",
+    uz: "Ishlarni «Uy vazifalari» bo'limida tekshiring.",
+  },
+  alertActionBlacklisted: {
+    ru: "Ученик удалён из группы курса и потерял доступ к материалам.",
+    uz: "O'quvchi kurs guruhidan o'chirildi va materiallarga ruxsatini yo'qotdi.",
+  },
+  alertActionRemoveFailed: {
+    ru: "Удалите ученика из группы вручную — боту не хватает прав или ученик уже вышел.",
+    uz: "O'quvchini guruhdan qo'lda o'chiring — bot huquqi yetmadi yoki o'quvchi allaqachon chiqib ketgan.",
   },
 } satisfies Record<string, Entry>;
 

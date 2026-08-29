@@ -1,10 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
-import { courseBlacklist, courseDisciplinaryEvents, coursePenaltyPoints, courses, students, teachers } from "../db/schema.js";
+import { courseBlacklist, courseDisciplinaryEvents, coursePenaltyPoints, students, teachers } from "../db/schema.js";
 import { removeStudentFromCourseGroup } from "../telegram/groupMembership.js";
-import { notifyStaff } from "../telegram/notify.js";
-import { formatDate, formatDateTime, t } from "../lib/i18n.js";
-import { languageForStaff, languageForStudent } from "../lib/language.js";
+import { alertStaff } from "../telegram/notify.js";
 
 type MissedRow = {
   homework_id: string;
@@ -126,12 +124,10 @@ async function autoBlacklist(courseId: number, studentId: number, teacherId: num
   const [student] = await db.select().from(students).where(eq(students.id, studentId)).limit(1);
   if (student) await removeStudentFromCourseGroup(courseId, student.telegramId);
 
-  const [course] = await db.select({ title: courses.title }).from(courses).where(eq(courses.id, courseId)).limit(1);
-  const lang = await languageForStaff(teacherId);
-  await notifyStaff({
+  await alertStaff({
     staffId: teacherId,
-    notificationType: "blacklist_event",
     courseId,
-    text: t(lang, "notifyAutoBlacklist", { student: studentId, course: course?.title ?? courseId }),
+    studentId,
+    alert: { kind: "blacklisted", auto: true },
   });
 }

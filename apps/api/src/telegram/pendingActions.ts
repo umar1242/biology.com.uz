@@ -10,6 +10,7 @@ type CreatePendingActionParams =
   | { actionType: "submit_homework"; targetHomeworkId: number }
   | { actionType: "link_course_group"; targetCourseId: number }
   | { actionType: "link_staff_notifications"; targetStaffId: number }
+  | { actionType: "link_staff_group"; targetStaffId: number }
   | { actionType: "attach_review_voice"; targetSubmissionId: number }
   | { actionType: "attach_cert_variant"; targetCertExamId: number }
   | {
