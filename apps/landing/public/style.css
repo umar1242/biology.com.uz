@@ -116,7 +116,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--violet-lift); o
   pointer-events: none;
 }
 .hero-in { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 22px; }
-.hero h1 { font-size: clamp(30px, 5vw, 52px); max-width: 21ch; letter-spacing: -0.04em; }
+.hero h1 { font-size: clamp(32px, 5.4vw, 56px); max-width: 16ch; letter-spacing: -0.04em; }
 .hero p { color: var(--text-dim); max-width: 52ch; font-size: 16px; }
 .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
 
@@ -144,19 +144,6 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--violet-lift); o
 .card.mark .ic { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.18); color: #fff; }
 .card.mark p { color: rgba(255,255,255,.82); }
 .card.mark .arrow { color: rgba(255,255,255,.7); }
-
-/* ---------------- повествовательный блок ---------------- */
-.story { max-width: 62ch; margin: 40px auto 0; }
-.story p { color: var(--text-dim); font-size: 15.5px; }
-.story p + p { margin-top: 14px; }
-.story ul { margin: 20px 0; display: flex; flex-direction: column; gap: 11px; }
-.story li { position: relative; padding-left: 22px; color: var(--text-dim); font-size: 15px; }
-.story li::before { content: ""; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--violet); }
-.story .out { color: var(--text); font-weight: 700; }
-
-/* Внутри карточки два подписанных абзаца: как устроено и что получается. */
-.card .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); margin-top: 6px; }
-.card.mark .lbl { color: rgba(255,255,255,.62); }
 
 /* ---------------- фиолетовая полоса с шагами ---------------- */
 .band { background: linear-gradient(150deg, var(--violet-deep) 0%, var(--violet) 55%, #5a2ce4 100%); }
