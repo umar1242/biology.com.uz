@@ -17,22 +17,43 @@ import { useI18n } from "../lib/i18n";
 
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 
+/*
+ * Пять карточек сводки раньше были одинаково серыми, и глаз не отличал
+ * «сколько учеников» от «сколько вот-вот потеряют доступ». Тон идёт по
+ * возрастанию срочности слева направо: акцент → информация → норма →
+ * внимание → тревога, и он же красит штрих под подписью. Штрих короткий и
+ * без дорожки намеренно: полоса на дорожке читалась бы как прогресс, а
+ * мерить тут нечего.
+ */
+type Tone = "accent" | "info" | "pos" | "warn" | "neg";
+
+const TONES: Record<Tone, { chip: string; bar: string }> = {
+  accent: { chip: "bg-accent-soft text-accent", bar: "bg-accent" },
+  info: { chip: "bg-info-soft text-info", bar: "bg-info" },
+  pos: { chip: "bg-pos-soft text-pos", bar: "bg-pos" },
+  warn: { chip: "bg-warn-soft text-warn", bar: "bg-warn" },
+  neg: { chip: "bg-neg-soft text-neg", bar: "bg-neg" },
+};
+
 function StatCard({
   icon: Icon,
   label,
   value,
+  tone,
 }: {
   icon: typeof Users;
   label: string;
   value: number | undefined;
+  tone: Tone;
 }) {
   return (
     <div className="border border-line rounded-2xl bg-card p-5">
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-inset text-ink">
+      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${TONES[tone].chip}`}>
         <Icon size={18} />
       </div>
-      <div className="text-2xl font-bold text-ink">{value ?? "—"}</div>
+      <div className="text-2xl font-bold text-ink tabular-nums">{value ?? "—"}</div>
       <div className="mt-0.5 text-xs text-muted">{label}</div>
+      <div className={`mt-3 h-1 w-10 rounded-full ${TONES[tone].bar}`} />
     </div>
   );
 }
@@ -67,40 +88,48 @@ export function DashboardPage() {
 
       <main className="px-4 pb-10 sm:px-8">
         {/* Hero */}
-        <div className="mb-6 overflow-hidden rounded-3xl border border-line bg-hero px-5 py-6 text-on-hero sm:px-8 sm:py-7">
-          <p className="text-xs font-medium tracking-wide text-hero-muted uppercase">
+        <div className="relative mb-6 overflow-hidden rounded-3xl border border-line bg-hero px-5 py-6 text-on-hero sm:px-8 sm:py-7">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-24 -right-16 h-64 w-64 rounded-full bg-accent/25 blur-3xl"
+          />
+          <p className="relative text-xs font-medium tracking-wide text-hero-muted uppercase">
             {dateFormatter.format(new Date())}
           </p>
-          <h2 className="mt-2 max-w-md text-xl font-bold">
+          <h2 className="relative mt-2 max-w-md text-xl font-bold">
             {t("welcomeBack", { name: auth?.display_name ?? t("colleague") })}
           </h2>
-          <p className="mt-1.5 max-w-md text-sm text-hero-muted">
+          <p className="relative mt-1.5 max-w-md text-sm text-hero-muted">
             {t("dashboardIntro")}
           </p>
         </div>
 
         {/* Stats */}
         <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
-          <StatCard icon={Users} label={t("statActiveStudents")} value={summary.data?.active_students} />
+          <StatCard icon={Users} label={t("statActiveStudents")} value={summary.data?.active_students} tone="accent" />
           <StatCard
             icon={ClipboardCheck}
             label={t("statUnreviewed")}
             value={summary.data?.unreviewed_homework_count}
+            tone="info"
           />
           <StatCard
             icon={Video}
             label={t("statLiveLessons")}
             value={summary.data?.upcoming_live_lessons}
+            tone="pos"
           />
           <StatCard
             icon={Clock}
             label={t("statAccessAttention")}
             value={summary.data?.access_needing_attention_count}
+            tone="warn"
           />
           <StatCard
             icon={ShieldAlert}
             label={t("statNearBlacklist")}
             value={summary.data?.students_near_blacklist_threshold}
+            tone="neg"
           />
         </div>
 
@@ -212,14 +241,16 @@ export function DashboardPage() {
               </div>
             </section>
 
+            {/* Заливка стала цветной, поэтому серый text-muted внутри неё
+                больше не читается — подписи берут прозрачный белый. */}
             <section className="rounded-3xl bg-brand p-6 text-on-brand">
-              <p className="text-xs font-medium tracking-wide text-muted uppercase">
+              <p className="text-xs font-medium tracking-wide text-on-brand/70 uppercase">
                 {t("statNearBlacklist")}
               </p>
-              <div className="mt-3 text-4xl font-extrabold">
+              <div className="mt-3 text-4xl font-extrabold tabular-nums">
                 {summary.data?.students_near_blacklist_threshold ?? "—"}
               </div>
-              <p className="mt-2 text-sm text-muted">
+              <p className="mt-2 text-sm text-on-brand/75">
                 {t("nearThresholdNote")}
               </p>
             </section>

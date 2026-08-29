@@ -33,6 +33,19 @@
   --color-nav-active: var(--nav-active);
   --color-on-nav-active: var(--on-nav-active);
 
+  /* Акцент и вторая холодная краска. Раньше палитра была строго
+     чёрно-белой плюс три семафорных цвета, и сводке нечем было отличать
+     одну цифру от другой — все пять карточек выглядели одинаково. */
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+
+  /* Выбранный пункт меню: отдельный токен, потому что nav-active — это
+     цвет яркого текста в рейле, а не заливка активной строки. */
+  --color-nav-sel: var(--nav-sel);
+  --color-on-nav-sel: var(--on-nav-sel);
+
   --color-pos: var(--pos);
   --color-pos-soft: var(--pos-soft);
   --color-neg: var(--neg);
@@ -48,8 +61,13 @@
   --ink: #0d0d0d;
   --muted: #8c8c8c;
   --line: #e9e7e7;
-  --brand: #0d0d0d;
+  --brand: #5b34e0;
   --on-brand: #ffffff;
+
+  --accent: #5b34e0;
+  --accent-soft: #ece7fd;
+  --info: #0e7490;
+  --info-soft: #e0f2f7;
 
   --hero: #0d0d0d;
   --on-hero: #ffffff;
@@ -60,6 +78,8 @@
   --nav-ink: #9a9a9a;
   --nav-active: #ffffff;
   --on-nav-active: #0d0d0d;
+  --nav-sel: #5b34e0;
+  --on-nav-sel: #ffffff;
 
   --pos: #0e9f6e;
   --pos-soft: #e3f5ee;
@@ -78,8 +98,13 @@
   --ink: #ffffff;
   --muted: #8c8c8c;
   --line: #262626;
-  --brand: #ffffff;
-  --on-brand: #0d0d0d;
+  --brand: #7c5cff;
+  --on-brand: #ffffff;
+
+  --accent: #8b6cff;
+  --accent-soft: #1e1738;
+  --info: #38bdf8;
+  --info-soft: #0d2432;
 
   --hero: #151515;
   --on-hero: #ffffff;
@@ -92,6 +117,8 @@
   --nav-ink: #8c8c8c;
   --nav-active: #ffffff;
   --on-nav-active: #0d0d0d;
+  --nav-sel: #7c5cff;
+  --on-nav-sel: #ffffff;
 
   --pos: #34d399;
   --pos-soft: #10291f;
