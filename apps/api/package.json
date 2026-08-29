@@ -11,7 +11,8 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "test:unit": "bash -euc 'shopt -s globstar; node --import tsx --test src/**/*.test.ts'",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "set-webhook": "tsx src/scripts/setWebhook.ts"
+    "set-webhook": "tsx src/scripts/setWebhook.ts",
+    "seed:e2e": "tsx src/scripts/seedE2eStaff.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

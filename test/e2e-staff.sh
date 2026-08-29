@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 RUNID=$$
 # End-to-end smoke of every staff-facing endpoint.
-API=${API_BASE:-http://localhost:3000/api/v1}   # прод: API_BASE=http://127.0.0.1:8080/api/v1
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 PASS=0; FAIL=0
 declare -a FAILURES
 
@@ -41,6 +41,15 @@ AT=$(echo "$RB" | jq -r .access_token)
 req POST /auth/login '{"username":"bob","password":"secret1234"}'
 chk "login bob (other tenant)" 200 "$RS" "$RB"
 BT=$(echo "$RB" | jq -r .access_token)
+
+# Ids, not row numbers: the seeder addresses these by telegram_id / username,
+# so the suite runs the same on a fresh CI database and on a dev one that
+# already has data.
+S1=$(PSQL "select id from students where telegram_id=900000001")
+S2=$(PSQL "select id from students where telegram_id=900000002")
+S3=$(PSQL "select id from students where telegram_id=900000003")
+ALICE=$(PSQL "select id from staff_users where username='alice'")
+echo "   fixtures: students=$S1,$S2,$S3 alice=$ALICE"
 
 echo "== COURSES =="
 req GET /courses "" "$TT"
@@ -138,37 +147,37 @@ echo "== STUDENTS / ACCESS =="
 req GET "/courses/$CID/students" "" "$TT"
 chk "list course students (empty)" 200 "$RS" "$RB"
 EXP=$(date -u -d '+30 days' +%Y-%m-%dT%H:%M:%SZ)
-req POST "/courses/$CID/students/1/access" "{\"expires_at\":\"$EXP\"}" "$TT"
+req POST "/courses/$CID/students/$S1/access" "{\"expires_at\":\"$EXP\"}" "$TT"
 chk "grant access student 1" 200 "$RS" "$RB"
-req POST "/courses/$CID/students/2/access" "{\"expires_at\":\"$EXP\"}" "$TT"
+req POST "/courses/$CID/students/$S2/access" "{\"expires_at\":\"$EXP\"}" "$TT"
 chk "grant access student 2" 200 "$RS" "$RB"
 req GET "/courses/$CID/students" "" "$TT"
 chk "list course students (2)" 200 "$RS" "$RB"
 echo "   $(echo "$RB" | jq -c '[.[]|{studentId,accessGranted,revoked,penaltyPoints,isBlacklisted}]')"
-req GET /students/1 "" "$TT"
+req GET "/students/$S1" "" "$TT"
 chk "student detail" 200 "$RS" "$RB"
 req GET /students/999999 "" "$TT"
 chk "student detail missing -> 404" 404 "$RS" "$RB"
 NEWEXP=$(date -u -d '+60 days' +%Y-%m-%dT%H:%M:%SZ)
-req PATCH "/courses/$CID/students/1/access" "{\"expires_at\":\"$NEWEXP\"}" "$TT"
+req PATCH "/courses/$CID/students/$S1/access" "{\"expires_at\":\"$NEWEXP\"}" "$TT"
 chk "extend access" 200 "$RS" "$RB"
 req GET /access/expiring "" "$TT"
 chk "expiring access list" 200 "$RS" "$RB"
 
 echo "== PENALTY / BLACKLIST =="
-req GET "/courses/$CID/students/1/penalty" "" "$TT"
+req GET "/courses/$CID/students/$S1/penalty" "" "$TT"
 chk "penalty detail" 200 "$RS" "$RB"
-req POST "/courses/$CID/students/1/blacklist" '{"reason":"e2e тест"}' "$TT"
+req POST "/courses/$CID/students/$S1/blacklist" '{"reason":"e2e тест"}' "$TT"
 chk "blacklist student" 200 "$RS" "$RB"
-req GET "/courses/$CID/students/1/penalty" "" "$TT"
+req GET "/courses/$CID/students/$S1/penalty" "" "$TT"
 echo "   after blacklist: $(echo "$RB" | jq -c '{points,isBlacklisted}' 2>/dev/null || echo "$RB" | head -c 200)"
-req POST "/courses/$CID/students/1/blacklist/clear" '{}' "$TT"
+req POST "/courses/$CID/students/$S1/blacklist/clear" '{}' "$TT"
 chk "clear blacklist" 200 "$RS" "$RB"
-req POST "/courses/$CID/students/1/penalty/reset" '{}' "$TT"
+req POST "/courses/$CID/students/$S1/penalty/reset" '{}' "$TT"
 chk "reset penalty" 200 "$RS" "$RB"
-req POST "/courses/$CID/students/2/access/revoke" '{}' "$TT"
+req POST "/courses/$CID/students/$S2/access/revoke" '{}' "$TT"
 chk "revoke access" 200 "$RS" "$RB"
-req POST "/courses/$CID/students/1/blacklist" '{"reason":"x"}' "$BT"
+req POST "/courses/$CID/students/$S1/blacklist" '{"reason":"x"}' "$BT"
 chk "blacklist cross-tenant -> 404" 404 "$RS" "$RB"
 
 echo "== ASSISTANTS =="
@@ -179,7 +188,7 @@ chk "assistant listing assistants -> 403" 403 "$RS" "$RB"
 req POST /assistants "$(jq -cn --arg u "e2e_helper_$RUNID" '{username:$u,password:"secret1234",display_name:"E2E Помощник"}')" "$TT"
 chk "create assistant" 201 "$RS" "$RB"
 AID=$(echo "$RB" | jq -r .staff_id)
-[ "$AID" = "null" ] && AID=$(docker exec myproject-postgres-1 psql -U postgres -d course_platform -t -A -c "select id from staff_users where username='e2e_helper_'"$RUNID"")
+[ "$AID" = "null" ] && AID=$(PSQL "select id from staff_users where username='e2e_helper_$RUNID'")
 req POST /assistants "$(jq -cn --arg u "e2e_helper_$RUNID" '{username:$u,password:"secret1234",display_name:"dup"}')" "$TT"
 chk "duplicate assistant username -> 409" 409 "$RS" "$RB"
 req POST /assistants '{"username":"short","password":"123","display_name":"x"}' "$TT"
@@ -207,9 +216,9 @@ echo "== ASSISTANT CAPABILITY ENFORCEMENT =="
 req GET /courses "" "$EAT"
 chk "assistant sees permitted course" 200 "$RS" "$RB"
 echo "   courses: $(echo "$RB" | jq -c '[.[]|.id]')"
-req POST "/courses/$CID/students/3/access" "{\"expires_at\":\"$EXP\"}" "$EAT"
+req POST "/courses/$CID/students/$S3/access" "{\"expires_at\":\"$EXP\"}" "$EAT"
 chk "assistant w/ canManageAccess grants" 200 "$RS" "$RB"
-req POST "/courses/$CID/students/3/blacklist" '{"reason":"no perm"}' "$EAT"
+req POST "/courses/$CID/students/$S3/blacklist" '{"reason":"no perm"}' "$EAT"
 chk "assistant w/o canManageBlacklist -> 403" 403 "$RS" "$RB"
 req POST /courses '{"title":"assistant course","subject":"biology"}' "$EAT"
 chk "assistant creating course -> 403" 403 "$RS" "$RB"
@@ -244,10 +253,10 @@ chk "missing submission -> 404" 404 "$RS" "$RB"
 # A placeholder file_id is fine: none of these endpoints fetch the bytes from
 # Telegram, they only read the row. (The raw-photo path needs a file_id minted
 # by the current bot, so it is verified by hand, not here.)
-SUB=$(docker exec myproject-postgres-1 psql -U postgres -d course_platform -t -A -c "
+SUB=$(PSQL "
   insert into homework_submissions
     (homework_id, student_id, teacher_id, attempt_number, photo_file_ids, is_late, status)
-  values ($H1, 1, 1, 1, ARRAY['E2E_PLACEHOLDER_FILE_ID'], false, 'pending')
+  values ($H1, $S1, $ALICE, 1, ARRAY['E2E_PLACEHOLDER_FILE_ID'], false, 'pending')
   returning id;" | head -1 | tr -d '[:space:]')
 req GET "/submissions/$SUB" "" "$TT"
 chk "get existing submission" 200 "$RS" "$RB"
@@ -259,7 +268,7 @@ req POST "/submissions/$SUB/review" '{"status":"passed","comment_text":"e2e"}' "
 chk "review submission" 200 "$RS" "$RB"
 req POST "/submissions/$SUB/review" '{"status":"bogus"}' "$TT"
 chk "review with bad status -> 422" 422 "$RS" "$RB"
-docker exec myproject-postgres-1 psql -U postgres -d course_platform -q -c \
+PSQL \
   "delete from bot_pending_actions where target_submission_id=$SUB; delete from homework_submissions where id=$SUB;" >/dev/null 2>&1
 
 echo "== ARCHIVE / DELETE (teardown) =="
@@ -285,7 +294,7 @@ chk "unarchive course" 200 "$RS" "$RB"
 # The API has no DELETE /courses (archiving is the product-level answer), so
 # the fixture course is removed directly — otherwise every run leaves one
 # behind in the dev database.
-docker exec -i myproject-postgres-1 psql -U postgres -d course_platform -q >/dev/null 2>&1 <<SQL
+PSQL_STDIN >/dev/null 2>&1 <<SQL
 BEGIN;
 DELETE FROM bot_pending_actions WHERE target_course_id = $CID;
 DELETE FROM notifications_log WHERE course_id = $CID;
@@ -304,3 +313,7 @@ SQL
 echo
 echo "==== RESULT: $PASS passed, $FAIL failed ===="
 for f in "${FAILURES[@]}"; do echo "  ! $f"; done
+
+# Exit code, not just a printed tally: without this a red suite still returns
+# 0 and CI reports success on a real regression.
+[ "$FAIL" -eq 0 ]

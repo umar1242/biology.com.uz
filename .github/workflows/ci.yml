@@ -4,12 +4,10 @@ name: CI
 # Telegram, no secrets — so they're fast and never flaky, and a red run here
 # always means a real regression.
 #
-# NOTE: the HTTP e2e suites (test/e2e-*.sh) are intentionally NOT wired in yet.
-# They currently assume the local docker-compose stack — they read the bot
-# token out of apps/api/.env and shell into a container hardcoded as
-# `myproject-postgres-1` (see grep in test/*.sh). Running them in CI first
-# needs that harness parametrised (DB access + staff seeding). Tracked as a
-# follow-up; kept out so this workflow stays green and meaningful.
+# The `e2e` job below runs the HTTP suites against a real server and a real
+# database. It needs no secrets: the bot token is only an HMAC key for Mini
+# App initData (it must match on both sides, nothing more), and the Telegram
+# API itself is answered by test/telegram-stub.mjs.
 
 on:
   push:
@@ -47,3 +45,79 @@ jobs:
 
       - name: Mini App build
         run: npm run build --workspace=apps/miniapp
+
+  # The HTTP suites: a real Fastify server, a real Postgres, real migrations.
+  # This is the only job that can catch a broken access check — the unit
+  # tests cover pure functions, and nothing else exercises a route.
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: course_platform
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/course_platform
+      JWT_SECRET: ci-only-jwt-secret-not-a-real-one
+      # Not a credential: initData is signed with it on both sides, so a
+      # fake token still exercises the real signature verification.
+      TELEGRAM_BOT_TOKEN: "111111:CI-FAKE-TOKEN"
+      TELEGRAM_BOT_API_URL: http://127.0.0.1:8099
+      # Webhook mode means startup calls getMe once instead of entering a
+      # polling loop the stub would have to hold open.
+      BOT_UPDATES_MODE: webhook
+      PORT: "3000"
+      API_BASE: http://127.0.0.1:3000/api/v1
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+
+      - name: Migrate
+        run: npm run db:migrate
+
+      # No self-serve signup exists, so alice/bob/helper_carol cannot appear
+      # on their own — the suites used to assume someone had made them.
+      - name: Seed staff accounts
+        run: npm run seed:e2e
+        env:
+          E2E_SEED: "yes"
+
+      - name: Build API
+        run: npm run build --workspace=apps/api
+
+      - name: Start Telegram stub and API
+        run: |
+          node test/telegram-stub.mjs &
+          node apps/api/dist/index.js > /tmp/api.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -sf http://127.0.0.1:3000/health >/dev/null && exit 0
+            sleep 1
+          done
+          echo "API did not come up:"; cat /tmp/api.log; exit 1
+
+      - name: Staff suite
+        run: bash test/e2e-staff.sh
+
+      - name: Student suite
+        run: bash test/e2e-student.sh
+
+      - name: Certificate exam suite
+        run: bash test/e2e-cert-exam.sh
+
+      - name: API log on failure
+        if: failure()
+        run: cat /tmp/api.log

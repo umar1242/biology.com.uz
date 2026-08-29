@@ -4,7 +4,7 @@
 # enter key 1-35 -> publish -> student solves -> photos for 36-43 ->
 # submit -> teacher grades -> student sees the result.
 RUNID=$$
-API=${API_BASE:-http://localhost:3000/api/v1}
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 PASS=0; FAIL=0; declare -a FAILURES
 
 chk() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); printf '  ok   %-54s %s\n' "$1" "$3"
@@ -15,20 +15,6 @@ req() { local m=$1 p=$2 d=$3 t=$4
   [ -n "$d" ] && a+=(-H 'Content-Type: application/json' -d "$d")
   RS=$(curl "${a[@]}"); RB=$(cat /tmp/_cb); }
 
-PSQL() { docker compose -f "$(dirname "$0")/../docker-compose.prod.yml" exec -T postgres psql -U postgres -d course_platform -t -A -c "$1"; }
-
-BOT=$(grep -E '^TELEGRAM_BOT_TOKEN=' "$(dirname "$0")/../apps/api/.env" | cut -d= -f2-)
-mint() { python3 - "$BOT" "$1" "$2" "$3" <<'PY'
-import sys,hmac,hashlib,json,time,urllib.parse
-tok,uid,uname,fname=sys.argv[1].strip(),int(sys.argv[2]),sys.argv[3],sys.argv[4]
-user=json.dumps({"id":uid,"first_name":fname,"username":uname},separators=(',',':'),ensure_ascii=False)
-d={"user":user,"auth_date":str(int(time.time())),"query_id":"AAEcert"}
-dcs="\n".join(f"{k}={d[k]}" for k in sorted(d))
-sk=hmac.new(b"WebAppData",tok.encode(),hashlib.sha256).digest()
-d["hash"]=hmac.new(sk,dcs.encode(),hashlib.sha256).hexdigest()
-print(urllib.parse.urlencode(d))
-PY
-}
 
 TG=$((770000000 + RUNID % 1000000))
 cleanup() {
@@ -39,7 +25,12 @@ cleanup() {
     PSQL "DELETE FROM cert_exam_items WHERE exam_id=$EXAM; DELETE FROM cert_exams WHERE id=$EXAM;" >/dev/null
     PSQL "DELETE FROM cert_items WHERE id NOT IN (SELECT item_id FROM cert_exam_items) AND id NOT IN (SELECT item_id FROM cert_exam_answers WHERE item_id IS NOT NULL);" >/dev/null
   fi
+  PSQL "DELETE FROM course_applications WHERE student_id IN (SELECT id FROM students WHERE telegram_id=$TG);" >/dev/null
   PSQL "DELETE FROM course_access WHERE student_id IN (SELECT id FROM students WHERE telegram_id=$TG); DELETE FROM students WHERE telegram_id=$TG;" >/dev/null
+  # Only when this run created it — an existing course belongs to the user.
+  if [ -n "${OWN_COURSE:-}" ]; then
+    PSQL "DELETE FROM course_applications WHERE course_id=$OWN_COURSE; DELETE FROM course_access WHERE course_id=$OWN_COURSE; DELETE FROM courses WHERE id=$OWN_COURSE;" >/dev/null
+  fi
 }
 trap cleanup EXIT
 
@@ -49,8 +40,15 @@ chk "login teacher" 200 "$RS" "$RB"; TT=$(echo "$RB" | jq -r .access_token)
 req POST /auth/login '{"username":"bob","password":"secret1234"}'
 chk "login other tenant" 200 "$RS" "$RB"; BT=$(echo "$RB" | jq -r .access_token)
 
-req GET /courses "" "$TT"; CID=$(echo "$RB" | jq -r '.[0].id')
-[ -z "$CID" ] || [ "$CID" = "null" ] && { echo "нет курса у alice — прерываю"; exit 1; }
+req GET /courses "" "$TT"; CID=$(echo "$RB" | jq -r '.[0].id // empty')
+# A fresh database has no courses at all, so make one and take it down again
+# at exit. Aborting here is what a CI run would otherwise do on every push.
+if [ -z "$CID" ] || [ "$CID" = "null" ]; then
+  req POST /courses '{"title":"E2E Cert Fixture","subject":"biology"}' "$TT"
+  chk "create fixture course" 201 "$RS" "$RB"
+  CID=$(echo "$RB" | jq -r .id)
+  OWN_COURSE=$CID
+fi
 echo "  курс: $CID"
 
 echo "== STRUCTURE =="
@@ -111,6 +109,12 @@ SI=$(mint "$TG" "cert_stu_$RUNID" "Серт")
 req POST /app/auth/telegram "$(jq -cn --arg d "$SI" '{init_data:$d}')"
 chk "student auth" 200 "$RS" "$RB"
 ST=$(echo "$RB" | jq -r .access_token); SID=$(echo "$RB" | jq -r .student_id)
+# The Mini App is closed until a student has filled in the questionnaire.
+# Written straight to the table on purpose: submitting the form through the
+# API would also grant course access, and the next checks are about what a
+# student sees *before* access is granted.
+PSQL "INSERT INTO course_applications (course_id, student_id, full_name, phone, parent_phone_primary)
+      VALUES ($CID, $SID, 'E2E Cert', '+998900000000', '+998900000001');" >/dev/null
 
 req GET /app/cert-exams "" "$ST"
 chk "no access -> exam hidden" "0" "$(echo "$RB" | jq -r '[.[]|select(.id=='"$EXAM"')]|length')" "$RB"
@@ -224,12 +228,16 @@ echo "== ISOLATION =="
 OTG=$((TG+1))
 OI=$(mint "$OTG" "cert_other_$RUNID" "Чужой")
 req POST /app/auth/telegram "$(jq -cn --arg d "$OI" '{init_data:$d}')"
-OT=$(echo "$RB" | jq -r .access_token)
+OT=$(echo "$RB" | jq -r .access_token); OSID=$(echo "$RB" | jq -r .student_id)
+# Onboard them too, otherwise the gate answers 403 first and these checks
+# would no longer prove anything about attempt isolation.
+PSQL "INSERT INTO course_applications (course_id, student_id, full_name, phone, parent_phone_primary)
+      VALUES ($CID, $OSID, 'E2E Other', '+998900000002', '+998900000003');" >/dev/null
 req GET "/app/cert-exam-attempts/$ATT" "" "$OT"
 chk "other student cannot read attempt -> 404" 404 "$RS" "$RB"
 req POST "/app/cert-exam-attempts/$ATT/submit" "" "$OT"
 chk "other student cannot submit -> 404" 404 "$RS" "$RB"
-PSQL "DELETE FROM students WHERE telegram_id=$OTG;" >/dev/null
+PSQL "DELETE FROM course_applications WHERE student_id=$OSID; DELETE FROM students WHERE telegram_id=$OTG;" >/dev/null
 
 req DELETE "/cert-exams/$EXAM" "" "$TT"
 chk "delete with attempts -> 409" 409 "$RS" "$RB"

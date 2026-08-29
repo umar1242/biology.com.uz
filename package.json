@@ -10,8 +10,10 @@
     "db:migrate": "npm run db:migrate --workspace=apps/api",
     "typecheck": "npm run typecheck --workspace=apps/api",
     "test:unit": "npm run test:unit --workspace=apps/api",
-    "test:api": "bash test/e2e-staff.sh && bash test/e2e-student.sh",
+    "test:api": "bash test/e2e-staff.sh && bash test/e2e-student.sh && bash test/e2e-cert-exam.sh",
     "test:api:staff": "bash test/e2e-staff.sh",
-    "test:api:student": "bash test/e2e-student.sh"
+    "test:api:student": "bash test/e2e-student.sh",
+    "test:api:cert": "bash test/e2e-cert-exam.sh",
+    "seed:e2e": "npm run seed:e2e --workspace=apps/api"
   }
 }
