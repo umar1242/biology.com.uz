@@ -5,6 +5,12 @@
 	# HTTP, поэтому X-Forwarded-Proto от края — единственный признак того,
 	# как посетитель пришёл на самом деле. Ссылку, набранную как http://,
 	# нельзя оставлять незашифрованной.
+	# www и голый домен отдавали одно и то же с кодом 200: для поисковика
+	# это две разные страницы с одинаковым содержимым. Канонический адрес —
+	# без www, он же стоит в og:url и в rel=canonical.
+	@www host www.biolog.com.uz
+	redir @www https://biolog.com.uz{uri} permanent
+
 	@insecure header X-Forwarded-Proto http
 	redir @insecure https://{host}{uri} permanent
 
