@@ -98,14 +98,18 @@ export function HomePage() {
         </div>
         <p className="text-[32px] leading-tight font-bold text-ink">{activeCourses}</p>
 
+        {/* Две цифры, за которыми ученик и заходит. Пока они нулевые —
+            обычный чернильный цвет; как только появляется работа, число
+            само подсвечивается: жёлтое требует действия, фиолетовое ждёт
+            учителя. */}
         <dl className="mt-3 space-y-1.5 text-[13px]">
           <div className="flex justify-between">
             <dt className="text-muted">{t("toSubmit")}</dt>
-            <dd className="font-medium text-ink">{toDo}</dd>
+            <dd className={`font-semibold tabular-nums ${toDo > 0 ? "text-warn" : "text-ink"}`}>{toDo}</dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-muted">{t("onReview")}</dt>
-            <dd className="font-medium text-ink">{onReview}</dd>
+            <dd className={`font-semibold tabular-nums ${onReview > 0 ? "text-accent" : "text-ink"}`}>{onReview}</dd>
           </div>
         </dl>
 
