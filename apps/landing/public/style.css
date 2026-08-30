@@ -135,13 +135,15 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--violet-lift); o
   transition: border-color .2s, transform .2s, background .2s;
 }
 .card:hover { border-color: #362f4d; transform: translateY(-2px); }
-.card .ic { width: 34px; height: 34px; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--line); display: grid; place-items: center; color: var(--violet-lift); }
+/* Объёмный стикер вместо линейной иконки: с двух метров шесть карточек
+   различаются картинкой, а не заголовком. Подложка и рамка ему не нужны —
+   он сам себе метка. */
+.card img.ic { width: 46px; height: 46px; display: block; margin-bottom: 2px; }
 .card .arrow { position: absolute; top: 20px; right: 18px; color: var(--text-faint); transition: color .2s; }
 .card:hover .arrow { color: var(--violet-lift); }
 .card h3 { font-size: 15.5px; font-weight: 700; margin-top: 4px; letter-spacing: -0.02em; }
 .card p { font-size: 13.5px; color: var(--text-dim); line-height: 1.55; }
 .card.mark { background: linear-gradient(160deg, var(--violet) 0%, var(--violet-deep) 100%); border-color: transparent; }
-.card.mark .ic { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.18); color: #fff; }
 .card.mark p { color: rgba(255,255,255,.82); }
 .card.mark .arrow { color: rgba(255,255,255,.7); }
 
