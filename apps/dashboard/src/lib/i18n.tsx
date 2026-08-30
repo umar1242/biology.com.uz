@@ -155,6 +155,36 @@ const STRINGS = {
     uz: "Hech bir variantga kirmagan bank topshiriqlari",
   },
 
+  // --- частично-кредитная модель и одномерность ---
+  calibThresholds: { ru: "Ступени письменной работы", uz: "Yozma ish bosqichlari" },
+  calibThresholdsDisordered: {
+    ru: "Ступени идут не по возрастанию: средней ступенью почти никто не заканчивает — работа либо не сдвигается, либо делается почти целиком. Шкалу оценивания стоит огрубить.",
+    uz: "Bosqichlar o'sish tartibida emas: o'rta bosqichda deyarli hech kim to'xtamaydi — ish yo siljimaydi, yo deyarli to'liq bajariladi. Baholash shkalasini yiriklashtirish kerak.",
+  },
+  calibThresholdsHint: {
+    ru: "Баллы сведены в пять ступеней. Порог — подготовка, при которой ученик с равной вероятностью остаётся на ступени или переходит на следующую.",
+    uz: "Ballar besh bosqichga keltirilgan. Bo'sag'a — o'quvchi bosqichda qolishi yoki keyingisiga o'tishi teng ehtimolli bo'lgan tayyorgarlik.",
+  },
+  raschDimensionTitle: { ru: "Одномерность вариантов", uz: "Variantlarning bir o'lchovliligi" },
+  raschDimensionHint: {
+    ru: "Модель Раша верна, только если вариант меряет одну величину. Первый контраст — насколько сильно задания расходятся на две группы после того, как подготовка уже учтена. Сравнивается не с общим порогом, а с потолком шума: столько даёт заведомо одномерный тест такого же размера.",
+    uz: "Rasch modeli variant bitta kattalikni o'lchagandagina to'g'ri. Birinchi kontrast — tayyorgarlik hisobga olingandan keyin topshiriqlar ikki guruhga qanchalik ajralishi. Umumiy chegara bilan emas, shovqin shifti bilan solishtiriladi: shuncha xuddi shu o'lchamdagi bir o'lchovli test beradi.",
+  },
+  raschNoiseCeiling: { ru: "шум даёт до {value}", uz: "shovqin {value} gacha beradi" },
+  raschContrast: { ru: "Первый контраст", uz: "Birinchi kontrast" },
+  raschDimensionOk: { ru: "одно измерение", uz: "bitta o'lchov" },
+  raschDimensionSuspect: { ru: "похоже на второе измерение", uz: "ikkinchi o'lchovga o'xshaydi" },
+  raschPoleTop: { ru: "Один полюс", uz: "Bir qutb" },
+  raschPoleBottom: { ru: "Другой полюс", uz: "Boshqa qutb" },
+  raschPoleHint: {
+    ru: "Если задания на полюсах явно про разное — вариант меряет две вещи сразу, и общая шкала складывает несравнимое.",
+    uz: "Agar qutblardagi topshiriqlar aniq turli narsa haqida bo'lsa — variant bir vaqtda ikki narsani o'lchaydi.",
+  },
+  raschDimensionNone: {
+    ru: "Пока не на чем считать: нужен вариант, где не меньше 20 учеников ответили на 5 и более откалиброванных заданий.",
+    uz: "Hozircha hisoblashga asos yo'q: kamida 20 o'quvchi 5 va undan ortiq kalibrlangan topshiriqqa javob bergan variant kerak.",
+  },
+
   // --- поправка на трудность варианта ---
   equatedTitle: { ru: "С поправкой на трудность варианта", uz: "Variant qiyinligiga tuzatish bilan" },
   equatedHint: {

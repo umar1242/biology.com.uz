@@ -772,6 +772,9 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         // calibration exists for.
         difficulty: calibration?.difficulty ?? null,
         difficulty_se: calibration?.standard_error ?? null,
+        // Только у 41–43: ступени частично-кредитной модели. Трудность у них
+        // — среднее этих порогов, и без самих порогов она мало что говорит.
+        thresholds: calibration?.thresholds ?? null,
         infit: calibration?.infit ?? null,
         outfit: calibration?.outfit ?? null,
         fit_band: calibration ? fitBand(calibration.outfit) : null,

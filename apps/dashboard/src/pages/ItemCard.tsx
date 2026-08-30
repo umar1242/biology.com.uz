@@ -56,6 +56,7 @@ type Card = {
     min_responses_for_verdict: number;
     difficulty: number | null;
     difficulty_se: number | null;
+    thresholds: number[] | null;
     infit: number | null;
     outfit: number | null;
     fit_band: "overfit" | "productive" | "underfit" | "degrading" | null;
@@ -411,6 +412,39 @@ export function ItemCardPage() {
                               : "fitProductive",
                       )}
                     </p>
+                  )}
+                  {/* У заданий с баллами трудность — среднее порогов, и сами
+                      ступени сообщают больше: где работа перестаёт двигаться
+                      дальше. */}
+                  {c.stats.thresholds && c.stats.thresholds.length > 0 && (
+                    <div className="mt-3">
+                      <p className="mb-1.5 text-xs text-muted">{t("calibThresholds")}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {c.stats.thresholds.map((d, i) => (
+                          <span
+                            key={i}
+                            className="rounded-lg bg-inset px-2.5 py-1 text-xs tabular-nums text-ink"
+                          >
+                            {i + 1} → {i + 2}
+                            <span className="ml-1.5 font-semibold">
+                              {d >= 0 ? "+" : ""}
+                              {d.toFixed(2)}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                      {/* Неупорядоченные пороги — не сбой счёта, а диагноз:
+                          такая ступень никогда не бывает самым вероятным
+                          исходом, то есть в шкале оценивания лишняя градация. */}
+                      {c.stats.thresholds.some((d, i) => i > 0 && d < (c.stats.thresholds as number[])[i - 1]) && (
+                        <p className="mt-1.5 text-xs leading-snug text-warn">
+                          {t("calibThresholdsDisordered")}
+                        </p>
+                      )}
+                      <p className="mt-1.5 text-xs leading-snug text-muted">
+                        {t("calibThresholdsHint")}
+                      </p>
+                    </div>
                   )}
                   {c.stats.calibration_state === "provisional" && (
                     <p className="mt-2 text-xs text-muted">

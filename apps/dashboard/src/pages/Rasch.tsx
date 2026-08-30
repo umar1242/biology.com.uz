@@ -58,6 +58,18 @@ type Overview = {
     rows: { raw: number; logit: number }[];
   }[];
   reference_exam_id: number | null;
+  dimensionality: {
+    exam_id: number;
+    title: string;
+    items: number;
+    persons: number;
+    first_contrast: number;
+    noise_ceiling: number;
+    suspect: boolean;
+    top: { code: string; loading: number }[];
+    bottom: { code: string; loading: number }[];
+  }[];
+  dimension_threshold: number;
   history: { run_id: number; run_at: string; persons: number; items: number }[];
 };
 
@@ -329,6 +341,64 @@ export function RaschPage() {
                   );
                 })}
               </div>
+            </Card>
+
+            {/* Одномерность — условие пригодности самой модели, поэтому стоит
+                выше диагностики отдельных заданий: если вариант меряет две
+                величины, трудность каждого задания уже спорна. */}
+            <Card
+              title={t("raschDimensionTitle")}
+              hint={t("raschDimensionHint", { threshold: data.dimension_threshold.toFixed(1) })}
+            >
+              {data.dimensionality.length === 0 ? (
+                <p className="text-xs text-muted">{t("raschDimensionNone")}</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {data.dimensionality.map((d) => (
+                    <div key={d.exam_id} className="rounded-xl bg-inset p-3">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="text-sm font-medium text-ink">{d.title}</span>
+                        <span className="text-[11px] text-muted">
+                          {d.items} · {d.persons}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-baseline gap-2">
+                        <span className="text-xs text-muted">{t("raschContrast")}</span>
+                        <span
+                          className={`text-lg font-semibold tabular-nums ${
+                            d.suspect ? "text-warn" : "text-ink"
+                          }`}
+                        >
+                          {d.first_contrast.toFixed(2)}
+                        </span>
+                        <span className="text-xs text-muted">
+                          {t("raschNoiseCeiling", { value: d.noise_ceiling.toFixed(2) })}
+                        </span>
+                        <span className={`text-xs ${d.suspect ? "text-warn" : "text-pos"}`}>
+                          {d.suspect ? t("raschDimensionSuspect") : t("raschDimensionOk")}
+                        </span>
+                      </div>
+
+                      {d.suspect && (
+                        <div className="mt-2.5 flex flex-col gap-1.5">
+                          {[
+                            { label: t("raschPoleTop"), items: d.top },
+                            { label: t("raschPoleBottom"), items: d.bottom },
+                          ].map((pole) => (
+                            <p key={pole.label} className="text-xs text-muted">
+                              <span className="text-ink">{pole.label}:</span>{" "}
+                              {pole.items
+                                .map((i) => `${i.code} (${i.loading.toFixed(2)})`)
+                                .join(", ")}
+                            </p>
+                          ))}
+                          <p className="text-xs leading-snug text-muted">{t("raschPoleHint")}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </Card>
 
             <Card title={t("raschMisfitTitle")}>

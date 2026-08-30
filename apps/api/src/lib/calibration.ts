@@ -7,8 +7,9 @@ import {
   certItemCalibrations,
   certItems,
 } from "../db/schema.js";
-import { isClosedTask } from "./certExam.js";
+import { isClosedTask, maxPointsFor } from "./certExam.js";
 import { calibrate, calibrationState, type RaschResponse } from "./rasch.js";
+import { bandPoints, calibratePartialCredit, type PolytomousResponse } from "./pcm.js";
 
 /**
  * Collects every graded answer belonging to one teacher into a single response
@@ -57,6 +58,45 @@ export async function collectResponses(teacherId: number): Promise<RaschResponse
     responses.push({ personId: r.attemptId, itemId: r.itemId, correct: solved });
   }
   return responses;
+}
+
+/**
+ * Ответы на задания 41–43 — те, что оцениваются баллами, а не «верно/неверно».
+ *
+ * Баллы сводятся в пять ступеней прямо здесь: тридцать порогов на тридцать
+ * баллов не оценить ни на какой реальной когорте (см. bandPoints).
+ */
+async function collectPolytomous(teacherId: number): Promise<PolytomousResponse[]> {
+  const rows = await db
+    .select({
+      itemId: certExamAnswers.itemId,
+      attemptId: certExamAnswers.attemptId,
+      taskNumber: certExamAnswers.taskNumber,
+      awardedPoints: certExamAnswers.awardedPoints,
+    })
+    .from(certExamAnswers)
+    .innerJoin(certExamAttempts, eq(certExamAttempts.id, certExamAnswers.attemptId))
+    .innerJoin(certItems, eq(certItems.id, certExamAnswers.itemId))
+    .where(
+      and(
+        eq(certItems.teacherId, teacherId),
+        sql`${certExamAttempts.status} IN ('submitted','reviewed')`,
+        sql`${certExamAnswers.itemId} IS NOT NULL`,
+        sql`${certExamAnswers.taskNumber} > 40`,
+        sql`${certExamAnswers.awardedPoints} IS NOT NULL`,
+      ),
+    );
+
+  const out: PolytomousResponse[] = [];
+  for (const r of rows) {
+    if (r.itemId === null || r.awardedPoints === null) continue;
+    out.push({
+      personId: r.attemptId,
+      itemId: r.itemId,
+      category: bandPoints(r.awardedPoints, maxPointsFor(r.taskNumber)),
+    });
+  }
+  return out;
 }
 
 export type CalibrationRunSummary = {
@@ -113,8 +153,34 @@ export async function runCalibration(teacherId: number): Promise<CalibrationRunS
       infit: i.infit,
       outfit: i.outfit,
       responses: i.responses,
+      thresholds: null,
     })),
   );
+
+  // Задания 41–43 — вторым проходом, по частично-кредитной модели и при
+  // ЗАФИКСИРОВАННЫХ способностях из первого прохода. Подготовка ученика уже
+  // измерена сорока заданиями, где информации несравнимо больше; позволять
+  // трём письменным работам её пересчитывать значило бы дать им вес, которого
+  // у них нет. Заодно письменная часть ложится на ту же шкалу, а не на свою.
+  const abilities = new Map(result.persons.map((p) => [p.personId, p.ability]));
+  const polytomous = await collectPolytomous(teacherId);
+  if (polytomous.length > 0 && abilities.size > 0) {
+    const written = calibratePartialCredit({ responses: polytomous, abilities });
+    if (written.items.length > 0) {
+      await db.insert(certItemCalibrations).values(
+        written.items.map((i) => ({
+          runId: run.id,
+          itemId: i.itemId,
+          difficulty: i.difficulty,
+          standardError: Number.isFinite(i.standardError) ? i.standardError : 99,
+          infit: i.infit,
+          outfit: i.outfit,
+          responses: i.responses,
+          thresholds: i.thresholds,
+        })),
+      );
+    }
+  }
 
   return {
     run_id: run.id,
@@ -135,6 +201,8 @@ export type ItemCalibration = {
   infit: number;
   outfit: number;
   responses: number;
+  /** Только у заданий 41–43: ступени частично-кредитной модели. */
+  thresholds: number[] | null;
 };
 
 /**
@@ -167,16 +235,25 @@ export async function latestCalibrationByItem(
       infit: r.infit,
       outfit: r.outfit,
       responses: r.responses,
+      thresholds: r.thresholds,
     });
   }
   return out;
 }
 
-/** Response counts per item, so the UI can say how far off the threshold is. */
+/**
+ * Response counts per item, so the UI can say how far off the threshold is.
+ * Считает оба вида ответов: у заданий 41–43 своя, частично-кредитная ветка, и
+ * без неё они выглядели бы как «ноль ответов» при готовой калибровке.
+ */
 export async function responseCountByItem(teacherId: number): Promise<Map<number, number>> {
-  const responses = await collectResponses(teacherId);
   const counts = new Map<number, number>();
-  for (const r of responses) counts.set(r.itemId, (counts.get(r.itemId) ?? 0) + 1);
+  for (const r of await collectResponses(teacherId)) {
+    counts.set(r.itemId, (counts.get(r.itemId) ?? 0) + 1);
+  }
+  for (const r of await collectPolytomous(teacherId)) {
+    counts.set(r.itemId, (counts.get(r.itemId) ?? 0) + 1);
+  }
   return counts;
 }
 

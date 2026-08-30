@@ -38,6 +38,7 @@ import {
 import { hashPassword } from "../auth/password.js";
 import { isClosedTask, itemCode, maxPointsFor, optionsFor, topicFor } from "../lib/certExam.js";
 import { calibrate, type RaschResponse } from "../lib/rasch.js";
+import { categoryProbabilities, PCM_CATEGORY_COUNT } from "../lib/pcm.js";
 import {
   latestCalibrationByItem,
   runCalibration,
@@ -112,6 +113,18 @@ function probability(ability: number, difficulty: number): number {
 function trueDifficulty(task: number, shift: number): number {
   const t = (task - 1) / 39;
   return -2.2 + 4.4 * t + shift + (rand() - 0.5) * 0.5;
+}
+
+/**
+ * Пороги ступеней письменной работы вокруг её трудности: перейти на первую
+ * ступень легче, чем на последнюю, и расстояние между ними примерно логит.
+ */
+function writtenThresholds(difficulty: number): number[] {
+  const steps = PCM_CATEGORY_COUNT - 1;
+  return Array.from(
+    { length: steps },
+    (_, i) => difficulty + (i - (steps - 1) / 2) * 0.9,
+  );
 }
 
 function keyFor(task: number): string | null {
@@ -354,10 +367,25 @@ async function seed(): Promise<void> {
       for (const item of sheet) {
         const task = item.task;
         if (task > 40) {
-          // Развёрнутые работы: баллы есть, но в дихотомическую модель они
-          // не идут — им нужна частично-кредитная версия Раша.
-          const share = Math.min(0.95, Math.max(0.15, probability(ability, 0.2)));
-          const points = Math.round(maxPointsFor(task) * share);
+          // Развёрнутые работы порождаются частично-кредитной моделью — той
+          // самой, которой они потом и калибруются. Раньше баллы были
+          // детерминированной функцией подготовки, и соответствие выходило
+          // 0.40: «слишком предсказуемо». Это было свойство генератора, а не
+          // заданий, и демонстрация на нём врала.
+          const thresholds = writtenThresholds(item.trueDifficulty);
+          const probabilities = categoryProbabilities(ability, thresholds);
+          let roll = rand();
+          let category = 0;
+          for (let k = 0; k < probabilities.length; k += 1) {
+            roll -= probabilities[k];
+            if (roll <= 0) {
+              category = k;
+              break;
+            }
+          }
+          const points = Math.round(
+            (maxPointsFor(task) * category) / (PCM_CATEGORY_COUNT - 1),
+          );
           manual += points;
           answers.push({ attemptId: 0, taskNumber: task, itemId: item.id, awardedPoints: points });
           continue;

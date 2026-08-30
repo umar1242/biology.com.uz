@@ -18,6 +18,7 @@ import {
 import { itemCode } from "./certExam.js";
 import { collectResponses } from "./calibration.js";
 import { scoreTable } from "./equating.js";
+import { analyseDimensionality, SECOND_DIMENSION_THRESHOLD } from "./dimensionality.js";
 import { loadEquatingContext } from "./equatingContext.js";
 import {
   calibrate,
@@ -100,6 +101,23 @@ export type RaschOverview = {
   }[];
   /** Вариант, к чьей шкале приводятся результаты остальных. */
   reference_exam_id: number | null;
+  /**
+   * Одномерность: меряет ли вариант одну величину. Считается по каждому
+   * варианту отдельно — матрица остатков должна быть полной, а ученик пишет
+   * один вариант, не весь банк.
+   */
+  dimensionality: {
+    exam_id: number;
+    title: string;
+    items: number;
+    persons: number;
+    first_contrast: number;
+    noise_ceiling: number;
+    suspect: boolean;
+    top: { code: string; loading: number }[];
+    bottom: { code: string; loading: number }[];
+  }[];
+  dimension_threshold: number;
   history: { run_id: number; run_at: string; persons: number; items: number }[];
 };
 
@@ -165,6 +183,8 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
     links: [],
     score_tables: [],
     reference_exam_id: null,
+    dimensionality: [],
+    dimension_threshold: SECOND_DIMENSION_THRESHOLD,
     history,
   };
   const latest = runs[0];
@@ -339,6 +359,47 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
     })
     .filter((t) => t.items >= 5);
 
+  // --- одномерность по вариантам ---------------------------------------
+  const abilityById = new Map(persons.map((p) => [p.personId, p.ability]));
+  const difficultyByItem = new Map(shown.map((i) => [i.id, i.difficulty]));
+  const codeByItem = new Map(shown.map((i) => [i.id, i.code]));
+  const responsesByExam = new Map<number, typeof responses>();
+  for (const r of responses) {
+    for (const [examId, items] of itemsByExam) {
+      if (!items.has(r.itemId)) continue;
+      const list = responsesByExam.get(examId) ?? [];
+      list.push(r);
+      responsesByExam.set(examId, list);
+    }
+  }
+
+  const dimensionality: RaschOverview["dimensionality"] = [];
+  for (const exam of exams) {
+    const rows = responsesByExam.get(exam.id);
+    if (!rows) continue;
+    const analysis = analyseDimensionality({
+      responses: rows,
+      difficulties: difficultyByItem,
+      abilities: abilityById,
+    });
+    if (!analysis) continue;
+    const named = analysis.loadings.map((l) => ({
+      code: codeByItem.get(l.itemId) ?? String(l.itemId),
+      loading: l.loading,
+    }));
+    dimensionality.push({
+      exam_id: exam.id,
+      title: exam.title,
+      items: analysis.items,
+      persons: analysis.persons,
+      first_contrast: analysis.firstContrast,
+      noise_ceiling: analysis.noiseCeiling,
+      suspect: analysis.suspect,
+      top: named.slice(0, 5),
+      bottom: named.slice(-5).reverse(),
+    });
+  }
+
   return {
     run: runInfo,
     thresholds,
@@ -366,6 +427,8 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
     links,
     score_tables,
     reference_exam_id: (await loadEquatingContext(teacherId)).referenceExamId,
+    dimensionality,
+    dimension_threshold: SECOND_DIMENSION_THRESHOLD,
     history,
   };
 }
