@@ -250,6 +250,11 @@ const STRINGS = {
     ru: "Бот тоже будет писать вам на выбранном языке.",
     uz: "Bot ham sizga tanlangan tilda yozadi.",
   },
+  certTypedHint: {
+    ru: "Ответ вводится с клавиатуры",
+    uz: "Javob klaviaturadan kiritiladi",
+  },
+  certTypedPlaceholder: { ru: "Ваш ответ", uz: "Javobingiz" },
 } satisfies Record<string, { ru: string; uz: string }>;
 
 export type StringKey = keyof typeof STRINGS;

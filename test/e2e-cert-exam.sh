@@ -172,6 +172,32 @@ for T in 36 37 38 39 40 41 42 43; do
         ON CONFLICT (attempt_id, task_number) DO UPDATE SET photo_file_ids = EXCLUDED.photo_file_ids;" >/dev/null
 done
 
+echo "== TYPED OPEN TASK =="
+# Задание 36 переводим на проверку с клавиатуры. Ключ живёт у задания
+# банка, поэтому берём его id из варианта.
+ITEM36=$(PSQL "SELECT item_id FROM cert_exam_items WHERE exam_id=$EXAM AND task_number=36;" | tr -d ' ')
+req PATCH "/cert-items/$ITEM36" '{"grading_mode":"typed"}' "$TT"
+chk "typed without key -> 422" 422 "$RS" "$RB"
+req PATCH "/cert-items/$ITEM36" '{"grading_mode":"typed","answer_key":[["митохондрия","митохондрии"]]}' "$TT"
+chk "typed with key" 200 "$RS" "$RB"
+req PATCH "/cert-items/$ITEM36" '{"answer_key":[["a"],["b"]]}' "$TT"
+chk "two parts for a short answer -> 422" 422 "$RS" "$RB"
+
+req GET "/app/cert-exam-attempts/$ATT" "" "$ST"
+chk "student sees typed mode" "typed" "$(echo "$RB" | jq -r '.tasks[35].grading_mode')" "$RB"
+chk "one answer part" "1" "$(echo "$RB" | jq -r '.tasks[35].answer_parts')" "$RB"
+chk "key never reaches the student" "null" "$(echo "$RB" | jq -r '.tasks[35].answer_key//"null"')" "$RB"
+
+# Регистр, лишние пробелы и точка в конце не должны решать судьбу ответа.
+req PUT "/app/cert-exam-attempts/$ATT/tasks/36/typed" '{"typed":["  Митохондрия. "]}' "$ST"
+chk "typed answer saved" 200 "$RS" "$RB"
+req PUT "/app/cert-exam-attempts/$ATT/tasks/37/typed" '{"typed":["что-нибудь"]}' "$ST"
+chk "typing into a manual task -> 422" 422 "$RS" "$RB"
+req PUT "/app/cert-exam-attempts/$ATT/tasks/10/typed" '{"typed":["A"]}' "$ST"
+chk "typing into a closed task -> 422" 422 "$RS" "$RB"
+req PUT "/app/cert-exam-attempts/$ATT/tasks/36/typed" '{"typed":["a","b"]}' "$ST"
+chk "wrong number of parts -> 422" 422 "$RS" "$RB"
+
 echo "== SUBMIT =="
 req POST "/app/cert-exam-attempts/$ATT/submit" "" "$ST"
 chk "submit" 200 "$RS" "$RB"
@@ -186,6 +212,13 @@ chk "edit after submit -> 409" 409 "$RS" "$RB"
 # above and the student answered B to all three, so only 34 lands. Total 21.
 AUTO=$(PSQL "SELECT auto_score FROM cert_exam_attempts WHERE id=$ATT;" | tr -d ' ')
 chk "auto score = 21 correct" "21" "$AUTO" "auto_score=$AUTO"
+
+# Открытое задание с вводом ответа оценивается в момент сдачи, до проверки
+# преподавателем: «  Митохондрия. » должно совпасть с ключом.
+P36=$(PSQL "SELECT awarded_points FROM cert_exam_answers WHERE attempt_id=$ATT AND task_number=36;" | tr -d ' ')
+chk "typed task graded at submit" "1" "$P36" "awarded=$P36"
+C36=$(PSQL "SELECT part_correct FROM cert_exam_answers WHERE attempt_id=$ATT AND task_number=36;" | tr -d ' ')
+chk "verdict frozen on the row" "{t}" "$C36" "part_correct=$C36"
 
 echo "== TEACHER REVIEW =="
 req GET /cert-exam-review-queue "" "$TT"

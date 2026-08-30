@@ -728,6 +728,12 @@ export const certItems = pgTable(
     // Spec §VI: I lower cognitive level, II higher. Not derivable from the
     // position, so the teacher sets it.
     cognitiveLevel: integer("cognitive_level"),
+    // Открытые задания (36–43) по умолчанию проверяет преподаватель. Если у
+    // вопроса есть однозначный короткий ответ, он включает режим "typed" и
+    // задаёт ключ в cert_item_answer_keys — тогда работа проверяется сразу.
+    // Режим живёт у задания, а не у варианта: вопрос переезжает между
+    // вариантами вместе со своим ключом, как и у закрытых заданий.
+    gradingMode: text("grading_mode").notNull().default("manual"),
     // Retire rather than delete: a bad question's history is what explains
     // past results, and deleting it would silently rewrite them.
     status: text("status").notNull().default("active"),
@@ -752,6 +758,11 @@ export const certItems = pgTable(
       .on(table.teacherId, table.sourceRef)
       .where(sql`${table.sourceRef} IS NOT NULL`),
     check("cert_item_task_range", sql`${table.taskNumber} BETWEEN 1 AND 43`),
+    check(
+      "cert_item_grading_mode_valid",
+      sql`${table.gradingMode} IN ('manual','typed')
+        AND (${table.taskNumber} > 35 OR ${table.gradingMode} = 'manual')`,
+    ),
     check(
       "cert_item_option_valid",
       sql`(${table.taskNumber} > 35 AND ${table.correctOption} IS NULL)
@@ -869,6 +880,28 @@ export const certExamAttempts = pgTable(
   ],
 );
 
+/**
+ * Ключ открытого задания: до шести частей, у каждой несколько допустимых
+ * написаний. Баллы здесь не хранятся — они делятся между частями поровну
+ * (см. splitPoints в lib/certExam.ts), поэтому число, которое можно
+ * рассинхронизировать с максимумом задания, просто не заводится.
+ */
+export const certItemAnswerKeys = pgTable(
+  "cert_item_answer_keys",
+  {
+    itemId: bigint("item_id", { mode: "number" })
+      .notNull()
+      .references(() => certItems.id, { onDelete: "cascade" }),
+    partIndex: integer("part_index").notNull(),
+    accepted: text("accepted").array().notNull(),
+  },
+  (table) => [
+    primaryKey({ name: "cert_item_answer_keys_pk", columns: [table.itemId, table.partIndex] }),
+    check("cert_answer_key_part_range", sql`${table.partIndex} BETWEEN 1 AND 6`),
+    check("cert_answer_key_not_empty", sql`array_length(${table.accepted}, 1) >= 1`),
+  ],
+);
+
 export const certExamAnswers = pgTable(
   "cert_exam_answers",
   {
@@ -887,6 +920,12 @@ export const certExamAnswers = pgTable(
     // Open tasks (36–43): photographed solution + the teacher's points.
     photoFileIds: text("photo_file_ids").array(),
     awardedPoints: integer("awarded_points"),
+    // Открытые задания в режиме "typed": что ученик набрал по каждой части
+    // и вердикт по ней. Вердикт замораживается при сдаче — по той же
+    // причине, что и is_correct у закрытых: поздняя правка ключа не должна
+    // переписывать уже сданную работу.
+    typedAnswers: text("typed_answers").array(),
+    partCorrect: boolean("part_correct").array(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -894,7 +933,8 @@ export const certExamAnswers = pgTable(
     check("cert_answer_task_range", sql`${table.taskNumber} BETWEEN 1 AND 43`),
     check(
       "cert_answer_closed_shape",
-      sql`${table.taskNumber} > 35 OR (${table.photoFileIds} IS NULL AND ${table.awardedPoints} IS NULL)`,
+      sql`${table.taskNumber} > 35 OR (${table.photoFileIds} IS NULL AND ${table.awardedPoints} IS NULL
+        AND ${table.typedAnswers} IS NULL AND ${table.partCorrect} IS NULL)`,
     ),
     check(
       "cert_answer_open_shape",

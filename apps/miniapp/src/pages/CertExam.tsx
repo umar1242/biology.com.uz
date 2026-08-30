@@ -14,7 +14,11 @@ type Task = {
   max_points: number;
   chosen_option: string | null;
   photo_count: number;
+  grading_mode: "manual" | "typed";
+  answer_parts: number;
+  typed_answers: string[] | null;
   is_correct: boolean | null;
+  part_correct: boolean[] | null;
   awarded_points: number | null;
 };
 
@@ -148,6 +152,29 @@ export function CertExamPage() {
   });
 
   const a = attempt.data;
+  // Набранные ответы держим локально и отправляем по уходу с поля: сеть в
+  // мессенджере ненадёжна, а терять набранное на каждом символе незачем.
+  const [typed, setTyped] = useState<Record<string, string>>({});
+  const saveTyped = useMutation({
+    mutationFn: (v: { task: number; parts: string[] }) =>
+      apiFetch(`/app/cert-exam-attempts/${attemptId}/tasks/${v.task}/typed`, {
+        method: "PUT",
+        body: JSON.stringify({ typed: v.parts }),
+      }),
+    onError: (e) => setError(errorText(e, t("frozenText"), t("applyFailed"))),
+  });
+
+  function typedValue(task: Task, part: number): string {
+    const key = `${task.task_number}:${part}`;
+    if (key in typed) return typed[key];
+    return task.typed_answers?.[part] ?? "";
+  }
+
+  function flushTyped(task: Task) {
+    const parts = Array.from({ length: task.answer_parts }, (_, i) => typedValue(task, i));
+    saveTyped.mutate({ task: task.task_number, parts });
+  }
+
   const closed = useMemo(() => a?.tasks.filter((x) => x.is_closed) ?? [], [a]);
   const open = useMemo(() => a?.tasks.filter((x) => !x.is_closed) ?? [], [a]);
   const answered = Object.values(local).filter(Boolean).length;
@@ -339,10 +366,8 @@ export function CertExamPage() {
               <p className="mb-3 text-sm font-semibold text-ink">{t("certOpenPart")}</p>
               <div className="flex flex-col gap-2">
                 {open.map((x) => (
-                  <div
-                    key={x.task_number}
-                    className="flex items-center justify-between gap-2 rounded-xl bg-inset p-3"
-                  >
+                  <div key={x.task_number} className="rounded-xl bg-inset p-3">
+                    <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-ink">
                         {t("certTaskShort", { n: x.task_number })}
@@ -351,9 +376,11 @@ export function CertExamPage() {
                         </span>
                       </p>
                       <p className="text-xs text-muted">
-                        {x.photo_count > 0
-                          ? t("certPhotoSent", { n: x.photo_count })
-                          : t("certPhotoNone")}
+                        {x.grading_mode === "typed"
+                          ? t("certTypedHint")
+                          : x.photo_count > 0
+                            ? t("certPhotoSent", { n: x.photo_count })
+                            : t("certPhotoNone")}
                         {a.status === "reviewed" && x.awarded_points !== null && (
                           <span className="ml-2 font-semibold text-ink">
                             {x.awarded_points}/{x.max_points}
@@ -361,7 +388,7 @@ export function CertExamPage() {
                         )}
                       </p>
                     </div>
-                    {editable && (
+                    {editable && x.grading_mode === "manual" && (
                       <button
                         type="button"
                         onClick={() => photoStart.mutate(x.task_number)}
@@ -370,6 +397,42 @@ export function CertExamPage() {
                         {x.photo_count > 0 ? <Check size={13} /> : <Camera size={13} />}
                         {t("certSendPhoto")}
                       </button>
+                    )}
+                    </div>
+
+                    {x.grading_mode === "typed" && x.answer_parts > 0 && (
+                      <div className="mt-2.5 flex flex-col gap-1.5">
+                        {Array.from({ length: x.answer_parts }, (_, part) => (
+                          <div key={part} className="flex items-center gap-2">
+                            {x.answer_parts > 1 && (
+                              <span className="w-4 shrink-0 text-center text-[11px] font-semibold text-muted">
+                                {part + 1}
+                              </span>
+                            )}
+                            <input
+                              type="text"
+                              inputMode="text"
+                              autoComplete="off"
+                              disabled={!editable}
+                              value={typedValue(x, part)}
+                              onChange={(e) =>
+                                setTyped((prev) => ({
+                                  ...prev,
+                                  [`${x.task_number}:${part}`]: e.target.value,
+                                }))
+                              }
+                              onBlur={() => editable && flushTyped(x)}
+                              placeholder={t("certTypedPlaceholder")}
+                              className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-brand disabled:opacity-70"
+                            />
+                            {a.status === "reviewed" && x.part_correct?.[part] !== undefined && (
+                              <span className="shrink-0 text-xs font-semibold">
+                                {x.part_correct[part] ? "✓" : "✗"}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 ))}

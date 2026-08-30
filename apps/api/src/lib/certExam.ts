@@ -314,3 +314,94 @@ export function splitHalves(
 
   return { testCorrect, writtenPoints };
 }
+
+// ---------------------------------------------------------------------
+// Открытые задания: ручная проверка или ввод ответа с клавиатуры
+// ---------------------------------------------------------------------
+//
+// Спецификация не запрещает проверять 36–43 автоматически: она лишь не
+// делает этого сама. Если у задания есть однозначный короткий ответ
+// («митохондрия», «0.5»), фотография тетради и ручная проверка — лишний
+// круг для всех. Режим выбирает преподаватель, и он же остаётся хозяином:
+// по умолчанию проверка ручная, автоматическая включается явно.
+
+export type GradingMode = "manual" | "typed";
+
+/** До скольких частей может состоять набранный ответ. */
+export const MAX_ANSWER_PARTS = 6;
+
+/**
+ * Сколько частей допустимо у задания. У 36–40 ответ один по определению
+ * («краткий ответ»), у 41–43 развёрнутое решение может разбиваться на
+ * несколько пунктов — их число задаёт преподаватель.
+ */
+export function maxPartsFor(taskNumber: number): number {
+  const kind = taskKind(taskNumber);
+  if (kind === "open_short") return 1;
+  if (kind === "open_extended") return MAX_ANSWER_PARTS;
+  return 0;
+}
+
+/**
+ * Делит баллы задания между частями поровну, остаток отдаёт первым.
+ * 35 на три части — это 12, 12 и 11, а не 11,67 у каждой: баллы целые,
+ * и терять единицу при делении нельзя.
+ */
+export function splitPoints(total: number, parts: number): number[] {
+  if (parts <= 0) return [];
+  const base = Math.floor(total / parts);
+  const remainder = total % parts;
+  return Array.from({ length: parts }, (_, i) => base + (i < remainder ? 1 : 0));
+}
+
+/**
+ * Приводит ответ к виду, в котором его можно сравнивать.
+ *
+ * Что здесь считается несущественным и почему:
+ *   регистр и лишние пробелы  — ученик набирает с телефона;
+ *   ё против е                — на многих клавиатурах ё просто нет;
+ *   апострофы в o' и g'       — узбекская латиница набирается пятью
+ *                               разными знаками, и все они одно и то же;
+ *   запятая в числе           — 0,5 и 0.5 это одно число;
+ *   точка в конце             — «митохондрия.» не другой ответ.
+ */
+export function normalizeAnswer(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[‘’ʻʼ`´]/g, "'")
+    .replace(/(\d)[,](\d)/g, "$1.$2")
+    .replace(/\s+/g, " ")
+    .replace(/[.,;:!]+$/, "");
+}
+
+/**
+ * Совпал ли ответ хотя бы с одним допустимым вариантом. Синонимы задаёт
+ * преподаватель: автоматическая проверка не должна угадывать, что
+ * «митохондрии» это тоже верно, — она должна об этом знать.
+ */
+export function matchesAnswerKey(given: string, accepted: readonly string[]): boolean {
+  const normalized = normalizeAnswer(given);
+  if (!normalized) return false;
+  return accepted.some((variant) => normalizeAnswer(variant) === normalized);
+}
+
+/**
+ * Баллы за набранный ответ: по части за каждую угаданную. Возвращает и
+ * вердикт по частям — он замораживается на строке ответа, чтобы поздняя
+ * правка ключа не переписала уже сданную работу.
+ */
+export function gradeTypedAnswer(params: {
+  taskNumber: number;
+  given: readonly (string | null)[];
+  key: readonly (readonly string[])[];
+}): { partCorrect: boolean[]; awardedPoints: number } {
+  const points = splitPoints(maxPointsFor(params.taskNumber), params.key.length);
+  const partCorrect = params.key.map((accepted, i) => {
+    const given = params.given[i];
+    return typeof given === "string" && matchesAnswerKey(given, accepted);
+  });
+  const awardedPoints = partCorrect.reduce((sum, ok, i) => sum + (ok ? points[i] : 0), 0);
+  return { partCorrect, awardedPoints };
+}

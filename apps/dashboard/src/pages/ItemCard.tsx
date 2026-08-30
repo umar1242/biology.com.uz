@@ -40,6 +40,10 @@ type Card = {
   options: string[];
   is_closed: boolean;
   max_points: number;
+  grading_mode: "manual" | "typed";
+  max_parts: number;
+  answer_key: string[][];
+  part_points: number[];
   entered_by: string | null;
   key_revised_at: string | null;
   stats: {
@@ -149,6 +153,119 @@ function OptionBreakdown({ rows, total }: { rows: OptionRow[]; total: number }) 
       ))}
     </div>
   );
+}
+
+/**
+ * Режим проверки открытого задания и ключ к нему.
+ *
+ * Баллы по частям не вводятся, а показываются: они делятся поровну, и поле
+ * для них означало бы число, которое можно рассинхронизировать с максимумом
+ * задания.
+ */
+function AnswerKeyEditor({
+  card,
+  onSave,
+  saving,
+}: {
+  card: Card;
+  onSave: (body: Record<string, unknown>) => void;
+  saving: boolean;
+}) {
+  const { t } = useI18n();
+  const [mode, setMode] = useState<"manual" | "typed">(card.grading_mode);
+  // Ключ редактируется строками: одна строка на часть, синонимы через «|».
+  const [rows, setRows] = useState<string[]>(
+    card.answer_key.length > 0 ? card.answer_key.map((v) => v.join(" | ")) : [""],
+  );
+
+  const parts = rows
+    .map((r) => r.split("|").map((v) => v.trim()).filter(Boolean))
+    .filter((v) => v.length > 0);
+  const points = splitEvenly(card.max_points, parts.length);
+  const canSave = mode === "manual" || parts.length > 0;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-1.5 rounded-xl bg-inset p-1.5">
+        {(["manual", "typed"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMode(m)}
+            className={`flex-1 rounded-lg py-2 text-[13px] font-semibold transition-colors ${
+              mode === m ? "bg-brand text-on-brand" : "text-muted"
+            }`}
+          >
+            {m === "manual" ? t("gradingManual") : t("gradingTyped")}
+          </button>
+        ))}
+      </div>
+
+      {mode === "typed" && (
+        <>
+          {rows.map((row, i) => (
+            <div key={i} className="flex items-center gap-2">
+              {card.max_parts > 1 && (
+                <span className="w-10 shrink-0 text-xs text-muted tabular-nums">
+                  {points[i] ?? 0} {t("gradingPts")}
+                </span>
+              )}
+              <input
+                value={row}
+                onChange={(e) =>
+                  setRows((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))
+                }
+                placeholder={t("gradingKeyPlaceholder")}
+                className="w-full rounded-xl border border-line bg-card px-3 py-2 text-sm outline-none focus:border-ink"
+              />
+              {rows.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs text-muted hover:text-neg"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+          {rows.length < card.max_parts && (
+            <button
+              type="button"
+              onClick={() => setRows((prev) => [...prev, ""])}
+              className="self-start rounded-xl border border-line px-3 py-1.5 text-xs font-semibold text-ink"
+            >
+              {t("gradingAddPart")}
+            </button>
+          )}
+          <p className="text-xs text-muted">{t("gradingSynonymHint")}</p>
+        </>
+      )}
+
+      <button
+        type="button"
+        disabled={saving || !canSave}
+        onClick={() =>
+          onSave(
+            mode === "typed"
+              ? { grading_mode: "typed", answer_key: parts }
+              : { grading_mode: "manual" },
+          )
+        }
+        className="self-start rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-on-brand disabled:opacity-50"
+      >
+        {t("save")}
+      </button>
+    </div>
+  );
+}
+
+/** Те же баллы по частям, что считает сервер: поровну, остаток первым. */
+function splitEvenly(total: number, parts: number): number[] {
+  if (parts <= 0) return [];
+  const base = Math.floor(total / parts);
+  const rem = total % parts;
+  return Array.from({ length: parts }, (_, i) => base + (i < rem ? 1 : 0));
 }
 
 export function ItemCardPage() {
@@ -335,6 +452,15 @@ export function ItemCardPage() {
                 )
               )}
             </div>
+
+            {/* Проверка открытого задания */}
+            {!c.is_closed && (
+              <div className="rounded-2xl border border-line bg-card p-5">
+                <p className="mb-1 text-sm font-semibold text-ink">{t("gradingTitle")}</p>
+                <p className="mb-3 text-xs text-muted">{t("gradingHint")}</p>
+                <AnswerKeyEditor card={c} onSave={(body) => patch.mutate(body)} saving={patch.isPending} />
+              </div>
+            )}
 
             {/* Usage across variants */}
             <div className="rounded-2xl border border-line bg-card p-5">

@@ -591,6 +591,20 @@ const STRINGS = {
     uz: "O'quvchi kursda avtomatik bloklanadigan chegara.",
   },
   penaltyThreshold: { ru: "Порог баллов", uz: "Ballar chegarasi" },
+  gradingTitle: { ru: "Как проверяется", uz: "Qanday tekshiriladi" },
+  gradingHint: {
+    ru: "Ручная проверка: ученик присылает фотографию решения. Ввод ответа: платформа сверяет набранное с ключом сразу при сдаче.",
+    uz: "Qo'lda tekshirish: o'quvchi yechim suratini yuboradi. Javob kiritish: platforma topshirilganda darrov kalit bilan solishtiradi.",
+  },
+  gradingManual: { ru: "Вручную", uz: "Qo'lda" },
+  gradingTyped: { ru: "Ввод ответа", uz: "Javob kiritish" },
+  gradingPts: { ru: "б.", uz: "b." },
+  gradingAddPart: { ru: "Добавить часть ответа", uz: "Javob qismini qo'shish" },
+  gradingKeyPlaceholder: { ru: "митохондрия | митохондрии", uz: "mitoxondriya | mitoxondriyalar" },
+  gradingSynonymHint: {
+    ru: "Через «|» перечислите допустимые написания. Регистр, лишние пробелы, ё/е и запятая в числе не влияют.",
+    uz: "«|» orqali ruxsat etilgan yozilishlarni sanang. Registr, ortiqcha bo'shliq va sondagi vergul ta'sir qilmaydi.",
+  },
 } satisfies Record<string, { ru: string; uz: string }>;
 
 export type StringKey = keyof typeof STRINGS;

@@ -8,6 +8,7 @@ import {
   certExamItems,
   certExams,
   certItems,
+  certItemAnswerKeys,
   staffUsers,
   students,
 } from "../db/schema.js";
@@ -25,22 +26,25 @@ import { createPendingActionDeepLink } from "../telegram/pendingActions.js";
 import { fetchTelegramFile } from "../telegram/client.js";
 import {
   AUTO_MAX_POINTS,
-  KEY_TASK_NUMBERS,
-  DISCRIMINATION_GROUP_SHARE,
-  MIN_ATTEMPTS_FOR_DISCRIMINATION,
-  RECOMMENDED_ANCHOR_COUNT,
   DEAD_DISTRACTOR_SHARE,
+  DISCRIMINATION_GROUP_SHARE,
+  KEY_TASK_NUMBERS,
+  MAX_ANSWER_PARTS,
+  MIN_ATTEMPTS_FOR_DISCRIMINATION,
+  PHOTO_TASK_NUMBERS,
+  RECOMMENDED_ANCHOR_COUNT,
+  TOTAL_MAX_POINTS,
   discriminationBand,
+  estimateCertScore,
+  isClosedTask,
   itemCode,
+  maxPartsFor,
+  maxPointsFor,
+  optionsFor,
+  splitHalves,
+  splitPoints,
   taskTypeFor,
   topicFor,
-  PHOTO_TASK_NUMBERS,
-  TOTAL_MAX_POINTS,
-  isClosedTask,
-  maxPointsFor,
-  estimateCertScore,
-  splitHalves,
-  optionsFor,
 } from "../lib/certExam.js";
 
 const createSchema = z.object({
@@ -82,6 +86,15 @@ const updateItemSchema = z.object({
   cognitive_level: z.union([z.literal(1), z.literal(2)]).nullable().optional(),
   status: z.enum(["active", "retired"]).optional(),
   notes: z.string().max(2000).nullable().optional(),
+  // Открытые задания: режим проверки и ключ. Ключ — это список частей, у
+  // каждой несколько допустимых написаний («митохондрия», «митохондрии»).
+  grading_mode: z.enum(["manual", "typed"]).optional(),
+  answer_key: z
+    .array(z.array(z.string().trim().min(1).max(200)).min(1).max(8))
+    .min(1)
+    .max(MAX_ANSWER_PARTS)
+    .nullable()
+    .optional(),
 });
 
 const reviewSchema = z.object({
@@ -314,6 +327,7 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         id: certItems.id,
         taskNumber: certItems.taskNumber,
         correctOption: certItems.correctOption,
+        gradingMode: certItems.gradingMode,
         topic: certItems.topic,
         sourceRef: certItems.sourceRef,
         // Only graded answers count: an attempt still in progress has
@@ -384,6 +398,7 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         topic: r.topic,
         source_ref: r.sourceRef,
         correct_option: r.correctOption,
+        grading_mode: r.gradingMode,
         is_closed: closed,
         max_points: maxPoints,
         used_in_variants: r.usedInVariants,
@@ -461,6 +476,14 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
           sql`${certExamAttempts.status} IN ('submitted','reviewed')`,
         ),
       );
+
+    const answerKey = isClosedTask(item.taskNumber)
+      ? []
+      : await db
+          .select()
+          .from(certItemAnswerKeys)
+          .where(eq(certItemAnswerKeys.itemId, itemId))
+          .orderBy(certItemAnswerKeys.partIndex);
 
     const closed = isClosedTask(item.taskNumber);
     const graded = answers.filter((a) => (closed ? a.isCorrect !== null : a.awarded !== null));
@@ -574,6 +597,11 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       options: optionsFor(item.taskNumber),
       is_closed: closed,
       max_points: maxPointsFor(item.taskNumber),
+      grading_mode: item.gradingMode,
+      max_parts: maxPartsFor(item.taskNumber),
+      answer_key: answerKey.map((k) => k.accepted),
+      // Баллы по частям не хранятся, а считаются: показываем, как они лягут.
+      part_points: splitPoints(maxPointsFor(item.taskNumber), answerKey.length),
       created_at: item.createdAt,
       updated_at: item.updatedAt,
       key_revised_at: item.keyRevisedAt,
@@ -614,6 +642,17 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
     const body = updateItemSchema.safeParse(request.body);
     if (!body.success) throw Unprocessable(body.error.message);
 
+    const wantsTypedFields =
+      body.data.grading_mode !== undefined || body.data.answer_key !== undefined;
+    if (wantsTypedFields && isClosedTask(item.taskNumber)) {
+      throw Unprocessable("Режим проверки и ключ с клавиатуры есть только у заданий 36–43");
+    }
+    if (body.data.answer_key && body.data.answer_key.length > maxPartsFor(item.taskNumber)) {
+      throw Unprocessable(
+        `Задание ${item.taskNumber} допускает не больше ${maxPartsFor(item.taskNumber)} частей ответа`,
+      );
+    }
+
     if (body.data.correct_option !== undefined) {
       if (!isClosedTask(item.taskNumber)) {
         throw Unprocessable("Open tasks have no answer key");
@@ -641,6 +680,52 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       hadAnswers = (row?.n ?? 0) > 0;
     }
 
+    // Автоматическая проверка без ключа означала бы ноль баллов всем.
+    const existingKey = await db
+      .select()
+      .from(certItemAnswerKeys)
+      .where(eq(certItemAnswerKeys.itemId, itemId))
+      .orderBy(certItemAnswerKeys.partIndex);
+    const finalMode = body.data.grading_mode ?? item.gradingMode;
+    const finalKeyLength =
+      body.data.answer_key === undefined
+        ? existingKey.length
+        : (body.data.answer_key?.length ?? 0);
+    if (finalMode === "typed" && finalKeyLength === 0) {
+      throw Unprocessable("Для проверки с клавиатуры нужен ключ хотя бы из одной части");
+    }
+
+    // Правка ключа после того, как по заданию уже отвечали, разводит
+    // статистику на две несравнимые половины — тот же случай, что и с
+    // буквой у закрытых заданий.
+    const typedKeyChanged =
+      body.data.answer_key !== undefined &&
+      JSON.stringify(body.data.answer_key ?? []) !==
+        JSON.stringify(existingKey.map((k) => k.accepted));
+    let typedHadAnswers = false;
+    if (typedKeyChanged) {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(certExamAnswers)
+        .where(
+          and(eq(certExamAnswers.itemId, itemId), sql`${certExamAnswers.partCorrect} IS NOT NULL`),
+        );
+      typedHadAnswers = (row?.n ?? 0) > 0;
+    }
+
+    if (body.data.answer_key !== undefined) {
+      await db.transaction(async (tx) => {
+        await tx.delete(certItemAnswerKeys).where(eq(certItemAnswerKeys.itemId, itemId));
+        for (const [i, accepted] of (body.data.answer_key ?? []).entries()) {
+          await tx.insert(certItemAnswerKeys).values({
+            itemId,
+            partIndex: i + 1,
+            accepted,
+          });
+        }
+      });
+    }
+
     const [updated] = await db
       .update(certItems)
       .set({
@@ -656,7 +741,10 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
           : {}),
         ...(body.data.status !== undefined ? { status: body.data.status } : {}),
         ...(body.data.notes !== undefined ? { notes: body.data.notes } : {}),
-        ...(keyChanged && hadAnswers ? { keyRevisedAt: new Date() } : {}),
+        ...(body.data.grading_mode !== undefined ? { gradingMode: body.data.grading_mode } : {}),
+        ...((keyChanged && hadAnswers) || (typedKeyChanged && typedHadAnswers)
+          ? { keyRevisedAt: new Date() }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(certItems.id, itemId))
@@ -1147,6 +1235,8 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
           is_closed: isClosedTask(n),
           max_points: maxPointsFor(n),
           chosen_option: a?.chosenOption ?? null,
+          typed_answers: a?.typedAnswers ?? null,
+          part_correct: a?.partCorrect ?? null,
           correct_option: isClosedTask(n) ? (keyByTask.get(n) ?? null) : null,
           is_correct: a?.isCorrect ?? null,
           photo_count: a?.photoFileIds?.length ?? 0,

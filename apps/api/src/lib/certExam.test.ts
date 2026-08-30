@@ -10,11 +10,16 @@ import {
   certGrade,
   discriminationBand,
   estimateCertScore,
+  gradeTypedAnswer,
   isClosedTask,
   isValidTaskNumber,
   itemCode,
+  matchesAnswerKey,
+  maxPartsFor,
   maxPointsFor,
+  normalizeAnswer,
   optionsFor,
+  splitPoints,
   taskKind,
   taskTypeFor,
   topicFor,
@@ -191,4 +196,94 @@ test("a middling attempt lands where the bands say it should", () => {
   assert.equal(e.written, 43.33);
   assert.equal(e.total, 46.04);
   assert.equal(e.grade, "C");
+});
+
+// ---------------------------------------------------------------------
+// Открытые задания с вводом ответа
+// ---------------------------------------------------------------------
+
+test("частей: у краткого ответа одна, у развёрнутого до шести", () => {
+  assert.equal(maxPartsFor(36), 1);
+  assert.equal(maxPartsFor(40), 1);
+  assert.equal(maxPartsFor(41), 6);
+  assert.equal(maxPartsFor(43), 6);
+  // Закрытые задания сюда не относятся вовсе.
+  assert.equal(maxPartsFor(1), 0);
+  assert.equal(maxPartsFor(35), 0);
+});
+
+test("баллы делятся поровну, остаток уходит первым частям", () => {
+  assert.deepEqual(splitPoints(30, 3), [10, 10, 10]);
+  assert.deepEqual(splitPoints(35, 3), [12, 12, 11]);
+  assert.deepEqual(splitPoints(10, 4), [3, 3, 2, 2]);
+  assert.deepEqual(splitPoints(30, 1), [30]);
+  assert.equal(splitPoints(35, 6).reduce((a, b) => a + b, 0), 35);
+});
+
+test("сумма баллов по частям равна максимуму задания при любом делении", () => {
+  for (const task of [41, 42, 43]) {
+    for (let parts = 1; parts <= 6; parts++) {
+      const sum = splitPoints(maxPointsFor(task), parts).reduce((a, b) => a + b, 0);
+      assert.equal(sum, maxPointsFor(task), `задание ${task}, частей ${parts}`);
+    }
+  }
+});
+
+test("нормализация не считает разницей то, что разницей не является", () => {
+  const same = (a: string, b: string) => assert.equal(normalizeAnswer(a), normalizeAnswer(b), `${a} ≠ ${b}`);
+  same("Митохондрия", "митохондрия");
+  same("  митохондрия  ", "митохондрия");
+  same("зелёный", "зеленый");
+  same("0,5", "0.5");
+  same("митохондрия.", "митохондрия");
+  same("клеточный   центр", "клеточный центр");
+  // Узбекская латиница: апостроф набирают пятью разными знаками.
+  same("o‘simlik", "o'simlik");
+  same("gʻisht", "g'isht");
+});
+
+test("нормализация оставляет разницей то, что ею является", () => {
+  assert.notEqual(normalizeAnswer("митохондрия"), normalizeAnswer("митохондрии"));
+  assert.notEqual(normalizeAnswer("0.5"), normalizeAnswer("0.55"));
+  assert.notEqual(normalizeAnswer("ядро"), normalizeAnswer("ядрышко"));
+});
+
+test("синонимы задаёт преподаватель, а не догадка", () => {
+  const key = ["митохондрия", "митохондрии", "mitoxondriya"];
+  assert.ok(matchesAnswerKey("Митохондрия", key));
+  assert.ok(matchesAnswerKey("митохондрии", key));
+  assert.ok(matchesAnswerKey(" MITOXONDRIYA ", key));
+  // Формы, которых нет в списке, не засчитываются: платформа не должна
+  // сама решать, что «митохондриями» — тоже верно.
+  assert.equal(matchesAnswerKey("митохондриями", key), false);
+  assert.equal(matchesAnswerKey("", key), false);
+  assert.equal(matchesAnswerKey("   ", key), false);
+});
+
+test("оценка развёрнутого задания складывается из угаданных частей", () => {
+  const key = [["хлоропласт"], ["митохондрия"], ["ядро"]];
+  assert.deepEqual(
+    gradeTypedAnswer({ taskNumber: 41, given: ["хлоропласт", "митохондрия", "ядро"], key }),
+    { partCorrect: [true, true, true], awardedPoints: 30 },
+  );
+  assert.deepEqual(
+    gradeTypedAnswer({ taskNumber: 41, given: ["хлоропласт", "ошибка", "ядро"], key }),
+    { partCorrect: [true, false, true], awardedPoints: 20 },
+  );
+  assert.deepEqual(
+    gradeTypedAnswer({ taskNumber: 41, given: [null, null, null], key }),
+    { partCorrect: [false, false, false], awardedPoints: 0 },
+  );
+});
+
+test("непройденная часть не роняет расчёт: пропущенных ответов может не быть вовсе", () => {
+  const key = [["а"], ["б"]];
+  const graded = gradeTypedAnswer({ taskNumber: 42, given: ["а"], key });
+  assert.deepEqual(graded.partCorrect, [true, false]);
+  assert.equal(graded.awardedPoints, 18); // 35 на две части: 18 и 17
+});
+
+test("краткий ответ 36–40 стоит один балл целиком", () => {
+  const graded = gradeTypedAnswer({ taskNumber: 37, given: ["ядро"], key: [["ядро"]] });
+  assert.deepEqual(graded, { partCorrect: [true], awardedPoints: 1 });
 });

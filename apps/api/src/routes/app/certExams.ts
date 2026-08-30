@@ -6,6 +6,7 @@ import {
   certExamAnswers,
   certExamItems,
   certItems,
+  certItemAnswerKeys,
   certExamAttempts,
   certExams,
   courseAccess,
@@ -28,6 +29,8 @@ import {
   estimateCertScore,
   splitHalves,
   optionsFor,
+  MAX_ANSWER_PARTS,
+  gradeTypedAnswer,
 } from "../../lib/certExam.js";
 
 const saveAnswersSchema = z.object({
@@ -41,6 +44,11 @@ const saveAnswersSchema = z.object({
       }),
     )
     .min(1),
+});
+
+/** Набранный ответ по открытому заданию с проверкой с клавиатуры. */
+const saveTypedSchema = z.object({
+  typed: z.array(z.string().max(400).nullable()).min(1).max(MAX_ANSWER_PARTS),
 });
 
 /**
@@ -276,6 +284,25 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(certExamAnswers.attemptId, attempt.id));
     const byTask = new Map(answers.map((a) => [a.taskNumber, a]));
 
+    // Как проверяется каждое открытое задание этого варианта и на сколько
+    // частей делится ответ. Сам ключ ученику, разумеется, не уходит —
+    // отсюда берётся только число полей ввода.
+    const openShape = new Map(
+      (
+        await db
+          .select({
+            taskNumber: certExamItems.taskNumber,
+            mode: certItems.gradingMode,
+            parts: sql<number>`count(${certItemAnswerKeys.partIndex})::int`,
+          })
+          .from(certExamItems)
+          .innerJoin(certItems, eq(certItems.id, certExamItems.itemId))
+          .leftJoin(certItemAnswerKeys, eq(certItemAnswerKeys.itemId, certItems.id))
+          .where(and(eq(certExamItems.examId, attempt.examId), sql`${certExamItems.taskNumber} > 35`))
+          .groupBy(certExamItems.taskNumber, certItems.gradingMode)
+      ).map((r) => [r.taskNumber, r]),
+    );
+
     // Correctness and points are withheld until the teacher has reviewed —
     // otherwise a student could learn the key from their own attempt.
     const reviewed = attempt.status === "reviewed";
@@ -307,7 +334,11 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
           max_points: maxPointsFor(n),
           chosen_option: a?.chosenOption ?? null,
           photo_count: a?.photoFileIds?.length ?? 0,
+          grading_mode: openShape.get(n)?.mode ?? "manual",
+          answer_parts: openShape.get(n)?.parts ?? 0,
+          typed_answers: a?.typedAnswers ?? null,
           is_correct: reviewed ? (a?.isCorrect ?? null) : null,
+          part_correct: reviewed ? (a?.partCorrect ?? null) : null,
           awarded_points: reviewed ? (a?.awardedPoints ?? null) : null,
         };
       }),
@@ -366,6 +397,62 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
     return { saved: body.data.answers.length };
   });
 
+  /**
+   * Сохраняет набранный ответ по одному открытому заданию. Проверка идёт не
+   * здесь, а при сдаче: пока попытка не сдана, ученик правит ответ сколько
+   * угодно, и вердикт ему не показывается.
+   */
+  app.put("/app/cert-exam-attempts/:id/tasks/:task/typed", async (request) => {
+    const auth = requireStudentAuth(request);
+    const params = request.params as { id: string; task: string };
+    const attempt = await loadOwnAttempt(auth.studentId, Number(params.id));
+    if (attempt.status !== "in_progress") throw Conflict("Attempt already submitted");
+
+    const taskNumber = Number(params.task);
+    if (isClosedTask(taskNumber)) throw Unprocessable("Это задание решается выбором варианта");
+
+    const body = saveTypedSchema.safeParse(request.body);
+    if (!body.success) throw Unprocessable(body.error.message);
+
+    const [shape] = await db
+      .select({
+        itemId: certItems.id,
+        mode: certItems.gradingMode,
+        parts: sql<number>`count(${certItemAnswerKeys.partIndex})::int`,
+      })
+      .from(certExamItems)
+      .innerJoin(certItems, eq(certItems.id, certExamItems.itemId))
+      .leftJoin(certItemAnswerKeys, eq(certItemAnswerKeys.itemId, certItems.id))
+      .where(
+        and(eq(certExamItems.examId, attempt.examId), eq(certExamItems.taskNumber, taskNumber)),
+      )
+      .groupBy(certItems.id, certItems.gradingMode);
+
+    if (!shape || shape.mode !== "typed") {
+      throw Unprocessable("Это задание проверяет преподаватель, решение отправляется фотографией");
+    }
+    if (body.data.typed.length !== shape.parts) {
+      throw Unprocessable(`В этом задании ${shape.parts} часть(и) ответа`);
+    }
+
+    const typed = body.data.typed.map((t) => t ?? "");
+
+    await db
+      .insert(certExamAnswers)
+      .values({
+        attemptId: attempt.id,
+        taskNumber,
+        itemId: shape.itemId,
+        typedAnswers: typed,
+      })
+      .onConflictDoUpdate({
+        target: [certExamAnswers.attemptId, certExamAnswers.taskNumber],
+        set: { typedAnswers: typed, updatedAt: new Date() },
+      });
+
+    return { saved: true };
+  });
+
   /** Deep link that lets the student send photos for one open task (36–43). */
   app.post("/app/cert-exam-attempts/:id/tasks/:task/photo-start", async (request) => {
     const auth = requireStudentAuth(request);
@@ -413,6 +500,29 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
       .from(certExamAnswers)
       .where(eq(certExamAnswers.attemptId, attempt.id));
 
+    // Ключи открытых заданий, которые проверяются с клавиатуры. Берутся
+    // здесь же, одним запросом: проверка идёт в момент сдачи, а не при
+    // сохранении ответа — иначе ученик подбирал бы ответ по вердикту.
+    const typedKeyRows = await db
+      .select({
+        taskNumber: certExamItems.taskNumber,
+        itemId: certItems.id,
+        partIndex: certItemAnswerKeys.partIndex,
+        accepted: certItemAnswerKeys.accepted,
+      })
+      .from(certExamItems)
+      .innerJoin(certItems, eq(certItems.id, certExamItems.itemId))
+      .innerJoin(certItemAnswerKeys, eq(certItemAnswerKeys.itemId, certItems.id))
+      .where(and(eq(certExamItems.examId, exam.id), eq(certItems.gradingMode, "typed")))
+      .orderBy(certExamItems.taskNumber, certItemAnswerKeys.partIndex);
+
+    const typedKeyByTask = new Map<number, { itemId: number; key: string[][] }>();
+    for (const row of typedKeyRows) {
+      const entry = typedKeyByTask.get(row.taskNumber) ?? { itemId: row.itemId, key: [] };
+      entry.key.push(row.accepted);
+      typedKeyByTask.set(row.taskNumber, entry);
+    }
+
     // Grade the closed half now and freeze each verdict on the row, so a
     // later key correction never silently rewrites an already-sat attempt.
     let autoScore = 0;
@@ -432,6 +542,37 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
               eq(certExamAnswers.taskNumber, a.taskNumber),
             ),
           );
+      }
+
+      // Открытые задания с вводом ответа: вердикт по каждой части и баллы
+      // ложатся на строку сразу, как и у закрытых. Задание без ответа
+      // получает ноль, а не остаётся неоценённым: пустая строка ответа —
+      // это тоже ответ, и преподавателю там проверять нечего.
+      for (const [taskNumber, { itemId, key }] of typedKeyByTask) {
+        const answer = answers.find((a) => a.taskNumber === taskNumber);
+        const graded = gradeTypedAnswer({
+          taskNumber,
+          given: answer?.typedAnswers ?? [],
+          key,
+        });
+        await tx
+          .insert(certExamAnswers)
+          .values({
+            attemptId: attempt.id,
+            taskNumber,
+            itemId,
+            typedAnswers: answer?.typedAnswers ?? key.map(() => ""),
+            partCorrect: graded.partCorrect,
+            awardedPoints: graded.awardedPoints,
+          })
+          .onConflictDoUpdate({
+            target: [certExamAnswers.attemptId, certExamAnswers.taskNumber],
+            set: {
+              partCorrect: graded.partCorrect,
+              awardedPoints: graded.awardedPoints,
+              updatedAt: now,
+            },
+          });
       }
 
       await tx
