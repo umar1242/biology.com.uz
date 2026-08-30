@@ -18,7 +18,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="/style.css?v=9">
+<link rel="stylesheet" href="/style.css?v=10">
+<script>
+/* Ставим флаг до первой отрисовки, иначе блоки успеют мелькнуть и спрятаться. */
+if ("IntersectionObserver" in window && !matchMedia("(prefers-reduced-motion: reduce)").matches)
+  document.documentElement.classList.add("js-reveal");
+</script>
 </head>
 <body>
 
@@ -346,5 +351,41 @@
   </footer>
 </div>
 
+
+<script>
+(function () {
+  var root = document.documentElement;
+  if (!root.classList.contains("js-reveal")) return;
+  try {
+    var sel = ".head, .story, .card, .step, .scale, .bands, .mock, .bullets > div, .cols, .panel";
+    var els = [].slice.call(document.querySelectorAll(sel));
+    // Задержка по месту в своей группе: карточки набегают каскадом, а не
+    // всплывают разом. Потолок в пять шагов — дальше ожидание уже заметно.
+    els.forEach(function (el) {
+      var group = [].slice.call(el.parentNode.children).filter(function (n) { return n.matches(sel); });
+      el.style.setProperty("--d", Math.min(group.indexOf(el), 5) * 70 + "ms");
+    });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        e.target.classList.add("shown");
+        io.unobserve(e.target);
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    els.forEach(function (el) { io.observe(el); });
+    // Страховка: если наблюдатель почему-то не сработает, через пять секунд
+    // показываем всё, что уже попало в экран. Пустая фиолетовая полоса на
+    // месте раздела хуже, чем анимация, которой не случилось.
+    setTimeout(function () {
+      els.forEach(function (el) {
+        if (el.getBoundingClientRect().top < window.innerHeight) el.classList.add("shown");
+      });
+    }, 5000);
+  } catch (err) {
+    // Показать без анимации лучше, чем не показать вовсе.
+    root.classList.remove("js-reveal");
+  }
+})();
+</script>
 </body>
 </html>

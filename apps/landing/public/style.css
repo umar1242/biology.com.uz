@@ -271,6 +271,28 @@ footer { padding-block: 24px; color: var(--text-faint); font-size: 12.5px; displ
 footer a { text-decoration: none; }
 footer a:hover { color: var(--text); }
 
+/* ---------------- появление при прокрутке ----------------
+   Класс js-reveal ставится скриптом в <head> и только если браузер умеет
+   IntersectionObserver и посетитель не просил убрать анимацию. Без него
+   страница остаётся статичной и, главное, видимой: скрывать содержимое
+   стилями в расчёте на скрипт нельзя. */
+.js-reveal .head,
+.js-reveal .story,
+.js-reveal .card,
+.js-reveal .step,
+.js-reveal .scale,
+.js-reveal .bands,
+.js-reveal .mock,
+.js-reveal .bullets > div,
+.js-reveal .cols,
+.js-reveal .panel {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity .5s ease, transform .5s cubic-bezier(.2, .7, .3, 1);
+  transition-delay: var(--d, 0ms);
+}
+.js-reveal .shown { opacity: 1; transform: none; }
+
 /* ---------------- узкие экраны ---------------- */
 /* Между 940 и 1150 меню ещё нужно, а две кнопки рядом с ним уже не
    помещаются — пункты начинали переноситься на вторую строку. */
