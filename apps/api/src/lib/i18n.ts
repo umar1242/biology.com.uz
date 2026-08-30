@@ -86,6 +86,7 @@ const STRINGS = {
     ru: "Файл варианта сохранён ✅ Теперь заполните ключ ответов 1–35 в дашборде.",
     uz: "Variant fayli saqlandi ✅ Endi boshqaruv panelida 1–35 javoblar kalitini to'ldiring.",
   },
+  openInDashboard: { ru: "Открыть в панели", uz: "Panelda ochish" },
   certTaskAccepted: {
     ru: "Принято! Задание №{task}, фото: {count}. Можно отправлять следующее задание.",
     uz: "Qabul qilindi! №{task} topshiriq, rasmlar: {count}. Keyingi topshiriqni yuborishingiz mumkin.",

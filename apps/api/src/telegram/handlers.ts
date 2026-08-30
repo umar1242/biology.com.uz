@@ -458,7 +458,15 @@ async function finalizeCertVariant(
     .set({ consumedAt: new Date() })
     .where(eq(botPendingActions.id, pending.id));
 
-  await ctx.reply(t(lang, "certVariantSaved"));
+  // Прикрепление файла — единственный шаг, ради которого преподаватель
+  // уходит из панели в бота. Кнопка возвращает его туда, где продолжается
+  // работа над вариантом: ключ и публикация делаются в дашборде.
+  await ctx.reply(t(lang, "certVariantSaved"), {
+    reply_markup: new InlineKeyboard().url(
+      t(lang, "openInDashboard"),
+      `${config.DASHBOARD_URL}/cert`,
+    ),
+  });
 }
 
 /** Student sent the photographed solution for one open task (36–43). */
