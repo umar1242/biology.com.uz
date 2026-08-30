@@ -179,6 +179,11 @@ const STRINGS = {
     ru: "Слева — сколько учеников с такой подготовкой, справа — сколько заданий такой трудности. Задание работает там, где напротив него стоят ученики.",
     uz: "Chapda — shunday tayyorgarlikdagi o'quvchilar soni, o'ngda — shunday qiyinlikdagi topshiriqlar soni. Topshiriq ro'parasida o'quvchilar turgan joyda ishlaydi.",
   },
+  raschAxisHint: {
+    ru: "Процент под логитом — какую долю банка решает ученик такого уровня. Это подпись для чтения: складывать и усреднять проценты нельзя, шкала неравномерна.",
+    uz: "Logit ostidagi foiz — shu darajadagi o'quvchi bankning qancha qismini ishlaydi. Bu faqat o'qish uchun izoh: foizlarni qo'shib, o'rtachasini olib bo'lmaydi, shkala notekis.",
+  },
+  raschSolvedShare: { ru: "решают {n}%", uz: "{n}% ishlaydi" },
   raschMapPersons: { ru: "Ученики", uz: "O'quvchilar" },
   raschMapItems: { ru: "Задания", uz: "Topshiriqlar" },
   raschMeanLine: { ru: "среднее {value}", uz: "o'rtacha {value}" },

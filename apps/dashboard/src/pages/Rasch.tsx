@@ -20,6 +20,7 @@ type OverviewItem = {
   fit_band: "overfit" | "productive" | "underfit" | "degrading";
   responses: number;
   state: "none" | "provisional" | "stable";
+  solved_share: number | null;
 };
 
 type Overview = {
@@ -39,7 +40,8 @@ type Overview = {
     person_mean: number | null;
     item_mean: number | null;
   };
-  bands: { from: number; persons: number; items: number }[];
+  axis: { logit: number; share: number }[];
+  bands: { from: number; persons: number; items: number; share: number }[];
   separation: { index: number; reliability: number; strata: number } | null;
   misfit: { underfit: OverviewItem[]; overfit: OverviewItem[] };
   links: {
@@ -85,10 +87,14 @@ function Card({
  * теряют. Ось идёт сверху вниз от трудного к лёгкому — так её печатают в
  * учебниках, и так же читается «выше = сильнее».
  */
-function WrightMap({ map }: { map: Overview["map"] }) {
+function WrightMap({ map, axis }: { map: Overview["map"]; axis: Overview["axis"] }) {
   const { t } = useI18n();
   const rows = useMemo(() => [...map.rows].sort((a, b) => b.from - a.from), [map.rows]);
   const max = Math.max(1, ...rows.map((r) => Math.max(r.persons, r.items)));
+  const shareAt = useMemo(
+    () => new Map(axis.map((a) => [a.logit, a.share])),
+    [axis],
+  );
 
   return (
     <div>
@@ -121,12 +127,20 @@ function WrightMap({ map }: { map: Overview["map"] }) {
                   />
                 )}
               </div>
-              <span
-                className={`w-11 shrink-0 text-center text-[10px] tabular-nums ${
-                  whole ? "font-semibold text-ink" : "text-muted/60"
-                }`}
-              >
-                {whole ? r.from.toFixed(0) : ""}
+              {/* Логит — честная величина, процент под ним — перевод на язык
+                  учителя. Второй строкой и тише: он для чтения, а не для
+                  арифметики. */}
+              <span className="flex w-16 shrink-0 items-baseline justify-center gap-1">
+                {whole && (
+                  <>
+                    <span className="text-[10px] font-semibold tabular-nums text-ink">
+                      {r.from.toFixed(0)}
+                    </span>
+                    <span className="text-[9px] tabular-nums text-muted">
+                      {Math.round((shareAt.get(Math.round(r.from)) ?? 0) * 100)}%
+                    </span>
+                  </>
+                )}
               </span>
               <div className="flex h-3.5 flex-1 items-center">
                 {r.items > 0 && (
@@ -146,6 +160,7 @@ function WrightMap({ map }: { map: Overview["map"] }) {
 }
 
 function MisfitList({ items, empty }: { items: OverviewItem[]; empty: string }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   if (items.length === 0) return <p className="text-xs text-muted">{empty}</p>;
   return (
@@ -160,6 +175,9 @@ function MisfitList({ items, empty }: { items: OverviewItem[]; empty: string }) 
           <span className="text-sm font-semibold tabular-nums text-ink">{i.code}</span>
           <span className="flex items-center gap-3 text-xs tabular-nums text-muted">
             <span>b {i.difficulty.toFixed(2)}</span>
+            {i.solved_share !== null && (
+              <span>{t("raschSolvedShare", { n: Math.round(i.solved_share * 100) })}</span>
+            )}
             <span>infit {i.infit.toFixed(2)}</span>
             <span className="font-semibold text-ink">outfit {i.outfit.toFixed(2)}</span>
             <span>{i.responses}</span>
@@ -258,7 +276,8 @@ export function RaschPage() {
             )}
 
             <Card title={t("raschMapTitle")} hint={t("raschMapHint")}>
-              <WrightMap map={data.map} />
+              <WrightMap map={data.map} axis={data.axis} />
+              <p className="mt-3 text-xs leading-snug text-muted">{t("raschAxisHint")}</p>
             </Card>
 
             <Card title={t("raschBandsTitle")} hint={t("raschBandsHint")}>
@@ -281,6 +300,9 @@ export function RaschPage() {
                       </span>
                       <span className="w-24 shrink-0 tabular-nums text-ink">
                         {t("raschMapItems")}: {b.items}
+                      </span>
+                      <span className="w-28 shrink-0 tabular-nums text-muted">
+                        {t("raschSolvedShare", { n: Math.round(b.share * 100) })}
                       </span>
                       {gap && (
                         <span className="flex items-center gap-1 font-medium text-warn">

@@ -52,6 +52,13 @@ export type OverviewItem = {
   fit_band: FitBand;
   responses: number;
   state: CalibrationState;
+  /**
+   * Доля нынешних учеников, которая справляется с этим заданием по модели.
+   * В отличие от сырой доли верных, считается против всех учеников банка, а
+   * не только против тех, кому это задание досталось, — поэтому сравнима
+   * между вариантами.
+   */
+  solved_share: number | null;
 };
 
 export type RaschOverview = {
@@ -71,7 +78,9 @@ export type RaschOverview = {
     person_mean: number | null;
     item_mean: number | null;
   };
-  bands: { from: number; persons: number; items: number }[];
+  /** Подпись к оси: какую долю банка решает ученик такого уровня. */
+  axis: { logit: number; share: number }[];
+  bands: { from: number; persons: number; items: number; share: number }[];
   separation: { index: number; reliability: number; strata: number } | null;
   misfit: { underfit: OverviewItem[]; overfit: OverviewItem[] };
   links: {
@@ -169,6 +178,7 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
     run: null,
     thresholds,
     map: { bin: MAP_BIN, rows: [], persons: 0, items: 0, person_mean: null, item_mean: null },
+    axis: [],
     bands: [],
     separation: null,
     misfit: { underfit: [], overfit: [] },
@@ -214,6 +224,7 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
       fit_band: fitBand(c.outfit),
       responses: c.responses,
       state: calibrationState(c.responses),
+      solved_share: null,
     }))
     .sort((a, b) => a.difficulty - b.difficulty);
 
@@ -240,6 +251,27 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
   const abilities = persons.map((p) => p.ability);
   const itemDifficulties = shown.map((i) => i.difficulty);
 
+  // --- вторая подпись к шкале ------------------------------------------
+  // Логит честен, но непереводим на язык учителя. Доля решённого — переводима
+  // и вычисляется из тех же трудностей: ожидаемое число верных при подготовке
+  // θ есть сумма вероятностей по заданиям банка.
+  //
+  // Только как подпись, не как шкала: расстояние от 50% до 60% и от 85% до
+  // 95% в процентах одинаково, а в подготовке — нет, поэтому средние и
+  // приросты по процентам считать нельзя.
+  const solveProbability = (ability: number, difficulty: number) =>
+    1 / (1 + Math.exp(-(ability - difficulty)));
+  const shareOfBank = (ability: number) =>
+    itemDifficulties.length === 0
+      ? 0
+      : mean(itemDifficulties.map((b) => solveProbability(ability, b)));
+
+  for (const item of shown) {
+    item.solved_share = abilities.length
+      ? mean(abilities.map((a) => solveProbability(a, item.difficulty)))
+      : null;
+  }
+
   const personHist = histogram(abilities, MAP_BIN);
   const itemHist = histogram(itemDifficulties, MAP_BIN);
   const keys = [...new Set([...personHist.keys(), ...itemHist.keys()])].sort((a, b) => a - b);
@@ -249,10 +281,17 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
     items: itemHist.get(from) ?? 0,
   }));
 
+  const axis: { logit: number; share: number }[] = [];
+  if (rows.length > 0) {
+    const lo = Math.ceil(rows[0].from);
+    const hi = Math.floor(rows[rows.length - 1].from);
+    for (let l = lo; l <= hi; l += 1) axis.push({ logit: l, share: shareOfBank(l) });
+  }
+
   // --- полосы покрытия -------------------------------------------------
   // Только там, где стоят ученики: пустая полоса выше всех учеников — не
   // дыра, а просто край шкалы.
-  const bands: { from: number; persons: number; items: number }[] = [];
+  const bands: { from: number; persons: number; items: number; share: number }[] = [];
   if (abilities.length > 0) {
     const lo = Math.floor(Math.min(...abilities) / BAND) * BAND;
     const hi = Math.ceil(Math.max(...abilities) / BAND) * BAND;
@@ -262,6 +301,8 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
         from: Math.round(from * 100) / 100,
         persons: abilities.filter((a) => a >= from && a < to).length,
         items: itemDifficulties.filter((d) => d >= from && d < to).length,
+        // Доля банка, которую решает ученик из середины полосы.
+        share: shareOfBank(from + BAND / 2),
       });
     }
   }
@@ -328,6 +369,7 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
       person_mean: abilities.length ? mean(abilities) : null,
       item_mean: shown.length ? mean(itemDifficulties) : null,
     },
+    axis,
     bands,
     separation:
       abilities.length >= MIN_PERSONS_FOR_SEPARATION
