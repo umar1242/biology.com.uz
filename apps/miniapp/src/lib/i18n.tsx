@@ -79,9 +79,12 @@ const STRINGS = {
 
   // home
   myCourses: { ru: "Мои курсы", uz: "Mening kurslarim" },
-  totalCount: { ru: "{count} всего", uz: "jami {count}" },
-  toSubmit: { ru: "Нужно сдать", uz: "Topshirish kerak" },
-  onReview: { ru: "На проверке", uz: "Tekshiruvda" },
+  homeGreeting: { ru: "Здравствуйте, {name}", uz: "Assalomu alaykum, {name}" },
+  homeGreetingPlain: { ru: "Здравствуйте", uz: "Assalomu alaykum" },
+  homeGreetingHint: {
+    ru: "Уроки, задания и сертификатные варианты — на вкладках внизу.",
+    uz: "Darslar, vazifalar va sertifikat variantlari — pastdagi bo'limlarda.",
+  },
   recentHomework: { ru: "Недавние задания", uz: "So'nggi vazifalar" },
   oneUnsubmitted: { ru: "Есть несданное задание", uz: "Topshirilmagan vazifa bor" },
   manyUnsubmitted: { ru: "Заданий к сдаче: {count}", uz: "Topshirish kerak: {count}" },
