@@ -12,7 +12,8 @@
     "test:unit": "bash -euc 'shopt -s globstar; node --import tsx --test src/**/*.test.ts'",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "set-webhook": "tsx src/scripts/setWebhook.ts",
-    "seed:e2e": "tsx src/scripts/seedE2eStaff.ts"
+    "seed:e2e": "tsx src/scripts/seedE2eStaff.ts",
+    "demo:rasch": "tsx src/scripts/raschDemo.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
