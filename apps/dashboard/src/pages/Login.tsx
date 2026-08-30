@@ -28,7 +28,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-app px-4">
+    <div className="bg-dots flex min-h-screen items-center justify-center bg-app px-4">
       <form onSubmit={handleSubmit} className="border border-line w-full max-w-sm rounded-3xl bg-card p-8">
         <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-sm font-extrabold text-on-brand">
           К

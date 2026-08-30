@@ -22,7 +22,7 @@ export function Layout() {
     <MobileNavContext.Provider value={{ open: () => setNavOpen(true) }}>
       <div className="flex h-screen overflow-hidden bg-app">
         <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
-        <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="bg-dots min-w-0 flex-1 overflow-y-auto">
           <Outlet />
         </div>
       </div>
