@@ -57,6 +57,7 @@ type Overview = {
     items: number;
     rows: { raw: number; logit: number }[];
   }[];
+  reference_exam_id: number | null;
   history: { run_id: number; run_at: string; persons: number; items: number }[];
 };
 
@@ -196,6 +197,20 @@ export function RaschPage() {
   const overview = useQuery({
     queryKey: ["cert-calibration-overview"],
     queryFn: () => apiFetch<Overview>("/cert-calibration/overview"),
+  });
+
+  // Эталон задаётся руками: от него зависит второе число в оценке каждого
+  // ученика, и меняться само собой при добавлении варианта оно не должно.
+  const setReference = useMutation({
+    mutationFn: (examId: number) =>
+      apiFetch("/cert-calibration/reference", {
+        method: "PATCH",
+        body: JSON.stringify({ exam_id: examId }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cert-calibration-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["cert-attempts"] });
+    },
   });
 
   const run = useMutation({
@@ -367,6 +382,23 @@ export function RaschPage() {
                 )}
               </div>
             </Card>
+
+            {data.score_tables.length > 0 && (
+              <Card title={t("equatedReference")} hint={t("equatedReferenceHint")}>
+                <select
+                  value={data.reference_exam_id ?? ""}
+                  onChange={(e) => setReference.mutate(Number(e.target.value))}
+                  disabled={setReference.isPending}
+                  className="w-full rounded-xl border border-line bg-card px-3 py-2 text-sm text-ink outline-none focus:border-ink disabled:opacity-50 sm:w-auto"
+                >
+                  {data.score_tables.map((s) => (
+                    <option key={s.exam_id} value={s.exam_id}>
+                      {s.title}
+                    </option>
+                  ))}
+                </select>
+              </Card>
+            )}
 
             {table && (
               <Card title={t("raschScoreTitle")} hint={t("raschScoreHint")}>

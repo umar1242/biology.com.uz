@@ -17,6 +17,8 @@ import {
 } from "../db/schema.js";
 import { itemCode } from "./certExam.js";
 import { collectResponses } from "./calibration.js";
+import { scoreTable } from "./equating.js";
+import { loadEquatingContext } from "./equatingContext.js";
 import {
   calibrate,
   calibrationState,
@@ -96,6 +98,8 @@ export type RaschOverview = {
     items: number;
     rows: { raw: number; logit: number }[];
   }[];
+  /** Вариант, к чьей шкале приводятся результаты остальных. */
+  reference_exam_id: number | null;
   history: { run_id: number; run_at: string; persons: number; items: number }[];
 };
 
@@ -133,30 +137,6 @@ function separation(abilities: number[], errors: number[]) {
   };
 }
 
-/**
- * Таблица «сумма верных → логит» для одного варианта: то самое место, где
- * трудность заданий входит в оценку ученика. Ожидаемая сумма при подготовке θ
- * равна сумме вероятностей по заданиям варианта, и она строго растёт по θ —
- * поэтому обратная задача решается делением пополам, без производных.
- */
-function scoreTable(difficulties: number[]): { raw: number; logit: number }[] {
-  const expected = (theta: number) =>
-    difficulties.reduce((s, b) => s + 1 / (1 + Math.exp(-(theta - b))), 0);
-
-  const rows: { raw: number; logit: number }[] = [];
-  for (let raw = 1; raw < difficulties.length; raw += 1) {
-    let lo = -7;
-    let hi = 7;
-    for (let i = 0; i < 60; i += 1) {
-      const mid = (lo + hi) / 2;
-      if (expected(mid) < raw) lo = mid;
-      else hi = mid;
-    }
-    rows.push({ raw, logit: Math.round(((lo + hi) / 2) * 100) / 100 });
-  }
-  return rows;
-}
-
 export async function buildOverview(teacherId: number): Promise<RaschOverview> {
   const thresholds = { provisional: MIN_RESPONSES_PROVISIONAL, stable: MIN_RESPONSES_STABLE };
 
@@ -184,6 +164,7 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
     misfit: { underfit: [], overfit: [] },
     links: [],
     score_tables: [],
+    reference_exam_id: null,
     history,
   };
   const latest = runs[0];
@@ -384,6 +365,7 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
     },
     links,
     score_tables,
+    reference_exam_id: (await loadEquatingContext(teacherId)).referenceExamId,
     history,
   };
 }

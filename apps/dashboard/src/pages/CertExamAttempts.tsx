@@ -16,6 +16,8 @@ type AttemptRow = {
   auto_score: number | null;
   manual_score: number | null;
   total_score: number | null;
+  cert_total: number | null;
+  equated_total: number | null;
 };
 
 export function CertExamAttemptsPage() {
@@ -70,6 +72,18 @@ export function CertExamAttemptsPage() {
               <div className="flex shrink-0 items-center gap-3">
                 {a.total_score !== null && (
                   <span className="text-sm font-semibold text-ink">{a.total_score}</span>
+                )}
+                {/* Балл на сертификатной шкале и он же с поправкой на
+                    трудность варианта — по нему и сравнивают потоки. */}
+                {a.cert_total !== null && (
+                  <span className="text-xs tabular-nums text-muted">
+                    {a.cert_total}
+                    {a.equated_total !== null && a.equated_total !== a.cert_total && (
+                      <span className="ml-1 font-semibold text-brand">
+                        → {a.equated_total}
+                      </span>
+                    )}
+                  </span>
                 )}
                 <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${tone[a.status]}`}>
                   {label[a.status]}

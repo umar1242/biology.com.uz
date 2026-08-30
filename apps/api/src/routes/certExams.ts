@@ -11,6 +11,7 @@ import {
   certItemAnswerKeys,
   courses,
   staffUsers,
+  teachers,
   students,
 } from "../db/schema.js";
 import { requireAuth, requireTeacher } from "../plugins/auth.js";
@@ -22,6 +23,8 @@ import {
 } from "../lib/calibration.js";
 import { calibrationState, fitBand, MIN_RESPONSES_PROVISIONAL } from "../lib/rasch.js";
 import { buildOverview } from "../lib/raschOverview.js";
+import { equateScore, type EquatedResult } from "../lib/equating.js";
+import { loadEquatingContext, type EquatingContext } from "../lib/equatingContext.js";
 import { accessibleCourseIds, loadAccessibleCourse } from "../lib/access.js";
 import { Conflict, NotFound, Unprocessable } from "../lib/errors.js";
 import { createPendingActionDeepLink } from "../telegram/pendingActions.js";
@@ -35,6 +38,7 @@ import {
   MIN_ATTEMPTS_FOR_DISCRIMINATION,
   PHOTO_TASK_NUMBERS,
   RECOMMENDED_ANCHOR_COUNT,
+  TEST_HALF_TASK_COUNT,
   TOTAL_MAX_POINTS,
   discriminationBand,
   estimateCertScore,
@@ -323,6 +327,49 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
    * were entered in the first place — one variant at a time.
    */
   /**
+   * Оценка попытки с поправкой на трудность варианта.
+   *
+   * Официальная оценка остаётся первой и неизменной — её считает государство.
+   * Здесь второе число: сумма верных переводится в уровень по трудностям
+   * своего варианта, уровень — в эквивалент на эталонном, и уже он идёт в ту
+   * же государственную формулу. Письменная половина не трогается: 41–43
+   * оцениваются в баллах, а дихотомической модели про них сказать нечего.
+   */
+  function equatedEstimate(params: {
+    context: EquatingContext;
+    examId: number;
+    testCorrect: number;
+    writtenPoints: number;
+  }) {
+    const variant = params.context.byExam.get(params.examId);
+    const result: EquatedResult = equateScore({
+      correct: params.testCorrect,
+      variantDifficulties: variant?.difficulties ?? [],
+      referenceDifficulties: params.context.referenceDifficulties,
+      linked: variant?.linked ?? false,
+    });
+
+    const estimate =
+      result.status === "ok" && result.equated_correct !== null
+        ? estimateCertScore({
+            testCorrect: result.equated_correct,
+            writtenPoints: params.writtenPoints,
+          })
+        : null;
+
+    return {
+      status: result.status,
+      measure: result.measure,
+      standard_error: result.standard_error,
+      equated_correct: result.equated_correct,
+      reference_length: result.reference_length,
+      reference_exam_id: params.context.referenceExamId,
+      shared_with_reference: variant?.sharedWithReference ?? 0,
+      estimate,
+    };
+  }
+
+  /**
    * Всё, что модель Раша говорит о банке целиком, а не об одном задании:
    * карта «ученики против заданий», разделяющая способность, задания вне
    * полосы соответствия, связанность вариантов и таблицы перевода.
@@ -330,6 +377,32 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
   app.get("/cert-calibration/overview", async (request) => {
     const auth = requireAuth(request);
     return buildOverview(auth.teacherId);
+  });
+
+  /**
+   * Эталонный вариант — тот, к чьей шкале приводятся результаты остальных.
+   *
+   * Настраивается руками, потому что выбор по умолчанию (вариант с наибольшим
+   * числом откалиброванных заданий) может смениться при добавлении нового
+   * варианта, а от эталона зависит второе число в оценке каждого ученика:
+   * прыгать оно не должно.
+   */
+  app.patch("/cert-calibration/reference", async (request) => {
+    const auth = requireTeacher(request);
+    const body = z
+      .object({ exam_id: z.number().int().positive().nullable() })
+      .safeParse(request.body);
+    if (!body.success) throw Unprocessable(body.error.message);
+
+    if (body.data.exam_id !== null) {
+      await loadAccessibleExam(auth, body.data.exam_id);
+    }
+    await db
+      .update(teachers)
+      .set({ certReferenceExamId: body.data.exam_id })
+      .where(eq(teachers.staffUserId, auth.teacherId));
+
+    return { reference_exam_id: (await loadEquatingContext(auth.teacherId)).referenceExamId };
   });
 
   app.get("/cert-items/variants", async (request) => {
@@ -1212,18 +1285,58 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(certExamAttempts.examId, exam.id))
       .orderBy(sql`${certExamAttempts.submittedAt} DESC NULLS LAST`);
 
-    return rows.map((r) => ({
-      id: r.id,
-      student_id: r.studentId,
-      student_name: [r.firstName, r.lastName].filter(Boolean).join(" "),
-      attempt_number: r.attemptNumber,
-      status: r.status,
-      submitted_at: r.submittedAt,
-      is_late: r.isLate,
-      auto_score: r.autoScore,
-      manual_score: r.manualScore,
-      total_score: r.totalScore,
-    }));
+    // Половины считает база одним запросом на весь список: то же деление, что
+    // в splitHalves(), но тянуть ради него все ответы всех попыток незачем.
+    const halves = await db
+      .select({
+        attemptId: certExamAnswers.attemptId,
+        testCorrect: sql<number>`(
+          count(*) FILTER (WHERE ${certExamAnswers.taskNumber} <= 35 AND ${certExamAnswers.isCorrect})
+          + count(*) FILTER (WHERE ${certExamAnswers.taskNumber} BETWEEN 36 AND 40
+                             AND coalesce(${certExamAnswers.awardedPoints}, 0) > 0)
+        )::int`,
+        writtenPoints: sql<number>`coalesce(
+          sum(${certExamAnswers.awardedPoints}) FILTER (WHERE ${certExamAnswers.taskNumber} >= 41), 0
+        )::int`,
+      })
+      .from(certExamAnswers)
+      .innerJoin(certExamAttempts, eq(certExamAttempts.id, certExamAnswers.attemptId))
+      .where(eq(certExamAttempts.examId, exam.id))
+      .groupBy(certExamAnswers.attemptId);
+    const halvesByAttempt = new Map(halves.map((h) => [h.attemptId, h]));
+
+    const context = await loadEquatingContext(auth.teacherId);
+
+    return rows.map((r) => {
+      const h = halvesByAttempt.get(r.id);
+      // Обе оценки только у проверенных работ: пока письменная часть не
+      // оценена, итог был бы посчитан по половине работы.
+      const scored = r.status === "reviewed" && h !== undefined ? h : null;
+      const equated = scored
+        ? equatedEstimate({
+            context,
+            examId: exam.id,
+            testCorrect: scored.testCorrect,
+            writtenPoints: scored.writtenPoints,
+          })
+        : null;
+
+      return {
+        id: r.id,
+        student_id: r.studentId,
+        student_name: [r.firstName, r.lastName].filter(Boolean).join(" "),
+        attempt_number: r.attemptNumber,
+        status: r.status,
+        submitted_at: r.submittedAt,
+        is_late: r.isLate,
+        auto_score: r.autoScore,
+        manual_score: r.manualScore,
+        total_score: r.totalScore,
+        cert_total: scored ? estimateCertScore(scored).total : null,
+        equated_total: equated?.estimate?.total ?? null,
+        equated_status: equated?.status ?? null,
+      };
+    });
   });
 
   /** Queue across all accessible courses — the teacher's "what's waiting" view. */
@@ -1293,6 +1406,17 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
     const keyByTask = await keyMapFor(exam.id);
     const answerByTask = new Map(answers.map((a) => [a.taskNumber, a]));
 
+    const halves = splitHalves(answers);
+    const reviewed = attempt.status === "reviewed";
+    const equated = reviewed
+      ? equatedEstimate({
+          context: await loadEquatingContext(auth.teacherId),
+          examId: exam.id,
+          testCorrect: halves.testCorrect,
+          writtenPoints: halves.writtenPoints,
+        })
+      : null;
+
     return {
       id: attempt.id,
       exam_id: exam.id,
@@ -1306,7 +1430,10 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       manual_score: attempt.manualScore,
       total_score: attempt.totalScore,
       total_max_points: TOTAL_MAX_POINTS,
-      cert_estimate: attempt.status === "reviewed" ? estimateCertScore(splitHalves(answers)) : null,
+      cert_estimate: reviewed ? estimateCertScore(halves) : null,
+      test_correct: reviewed ? halves.testCorrect : null,
+      test_half_task_count: TEST_HALF_TASK_COUNT,
+      equated,
       review_comment_text: attempt.reviewCommentText,
       tasks: Array.from({ length: 43 }, (_, i) => i + 1).map((n) => {
         const a = answerByTask.get(n);

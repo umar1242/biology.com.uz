@@ -155,6 +155,42 @@ const STRINGS = {
     uz: "Hech bir variantga kirmagan bank topshiriqlari",
   },
 
+  // --- поправка на трудность варианта ---
+  equatedTitle: { ru: "С поправкой на трудность варианта", uz: "Variant qiyinligiga tuzatish bilan" },
+  equatedHint: {
+    ru: "Сумма верных переведена в уровень по трудностям этого варианта, а уровень — в эквивалент на эталонном. Письменная половина не меняется.",
+    uz: "To'g'ri javoblar soni shu variant qiyinligi bo'yicha darajaga, daraja esa etalon variantdagi ekvivalentga o'tkazildi. Yozma yarmi o'zgarmaydi.",
+  },
+  equatedMeasure: { ru: "Уровень подготовки", uz: "Tayyorgarlik darajasi" },
+  equatedSolved: { ru: "Решено", uz: "Ishlangan" },
+  equatedOnReference: { ru: "На эталонном варианте", uz: "Etalon variantda" },
+  equatedOutOf: { ru: "{n} из {total}", uz: "{total} dan {n}" },
+  equatedDelta: { ru: "поправка {value}", uz: "tuzatish {value}" },
+  equatedShared: { ru: "Общих заданий с эталоном: {n}", uz: "Etalon bilan umumiy topshiriqlar: {n}" },
+  equatedIsReference: { ru: "Это и есть эталонный вариант", uz: "Bu — etalon variantning o'zi" },
+  equatedNotCalibrated: {
+    ru: "Недоступно: задания варианта ещё не откалиброваны. Нужно {min} ответов на задание.",
+    uz: "Mavjud emas: variant topshiriqlari hali kalibrlanmagan. Har topshiriqqa {min} javob kerak.",
+  },
+  equatedNotLinked: {
+    ru: "Недоступно: у варианта нет общих заданий с остальными. Добавьте якорные задания — тогда результаты станут сравнимы.",
+    uz: "Mavjud emas: variantning boshqalar bilan umumiy topshirig'i yo'q. Langar topshiriqlar qo'shing — shunda natijalar solishtiriladi.",
+  },
+  equatedBelowRange: {
+    ru: "Уровень ниже того, что этот вариант способен измерить: ни одного верного ответа.",
+    uz: "Daraja bu variant o'lchay oladiganidan past: bitta ham to'g'ri javob yo'q.",
+  },
+  equatedAboveRange: {
+    ru: "Уровень выше измеримого этим вариантом: решено всё.",
+    uz: "Daraja bu variant o'lchaganidan yuqori: hammasi ishlangan.",
+  },
+  equatedColumn: { ru: "с поправкой", uz: "tuzatish bilan" },
+  equatedReference: { ru: "Эталонный вариант", uz: "Etalon variant" },
+  equatedReferenceHint: {
+    ru: "К его шкале приводятся результаты остальных вариантов. По умолчанию — вариант с наибольшим числом откалиброванных заданий.",
+    uz: "Qolgan variantlar natijalari uning shkalasiga keltiriladi. Sukut bo'yicha — eng ko'p kalibrlangan topshiriqli variant.",
+  },
+
   // --- шкала Раша ---
   navRasch: { ru: "Шкала Раша", uz: "Rasch shkalasi" },
   raschTitle: { ru: "Шкала Раша", uz: "Rasch shkalasi" },

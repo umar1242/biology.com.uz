@@ -131,6 +131,12 @@ export const teachers = pgTable("teachers", {
   // NULL = follow the teacher's interface language, which is what everyone
   // had before this column existed.
   notificationLanguage: languageEnum("notification_language"),
+  // Вариант, к чьей шкале приводятся результаты остальных. Ссылка объявлена
+  // ниже, в relations-стиле, чтобы не заводить круговую зависимость таблиц:
+  // cert_exams ссылается на teachers, и обратная ссылка здесь замкнула бы
+  // определения друг на друга. NULL — платформа выбирает сама вариант с
+  // наибольшим числом откалиброванных заданий.
+  certReferenceExamId: bigint("cert_reference_exam_id", { mode: "number" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

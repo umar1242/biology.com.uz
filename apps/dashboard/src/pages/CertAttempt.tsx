@@ -18,6 +18,7 @@ type AttemptTask = {
 
 type Attempt = {
   id: number;
+  exam_id: number;
   exam_title: string;
   student_id: number;
   attempt_number: number;
@@ -29,15 +30,132 @@ type Attempt = {
   total_score: number | null;
   total_max_points: number;
   review_comment_text: string | null;
-  cert_estimate: {
-    test: number;
-    written: number;
-    total: number;
-    percent: number;
-    grade: "A+" | "A" | "B+" | "B" | "C+" | "C" | null;
+  cert_estimate: CertEstimate | null;
+  test_correct: number | null;
+  test_half_task_count: number;
+  equated: {
+    status: "ok" | "not_calibrated" | "not_linked" | "below_range" | "above_range";
+    measure: number | null;
+    standard_error: number | null;
+    equated_correct: number | null;
+    reference_length: number;
+    reference_exam_id: number | null;
+    shared_with_reference: number;
+    estimate: CertEstimate | null;
   } | null;
   tasks: AttemptTask[];
 };
+
+type CertEstimate = {
+  test: number;
+  written: number;
+  total: number;
+  percent: number;
+  grade: "A+" | "A" | "B+" | "B" | "C+" | "C" | null;
+};
+
+/**
+ * Поправка на трудность варианта.
+ *
+ * Показывается только преподавателю: два числа рядом ученик прочтёт как
+ * «настоящее» и «ненастоящее», а объяснить шкалу логитов на экране мини-аппа
+ * не выйдет. Преподавателю же поправка нужна сразу — по ней он сравнивает
+ * потоки, писавшие разные варианты.
+ */
+function EquatedBlock({ attempt }: { attempt: Attempt }) {
+  const { t } = useI18n();
+  const e = attempt.equated;
+  if (!e) return null;
+
+  const excuse: Record<string, string> = {
+    not_calibrated: t("equatedNotCalibrated", { min: 30 }),
+    not_linked: t("equatedNotLinked"),
+    below_range: t("equatedBelowRange"),
+    above_range: t("equatedAboveRange"),
+  };
+
+  if (e.status !== "ok" || !e.estimate) {
+    return (
+      <div className="mb-5 rounded-2xl border border-line bg-card p-4">
+        <p className="mb-1.5 text-sm font-semibold text-ink">{t("equatedTitle")}</p>
+        <p className="text-xs leading-snug text-muted">{excuse[e.status] ?? "—"}</p>
+      </div>
+    );
+  }
+
+  const delta = attempt.cert_estimate
+    ? e.estimate.total - attempt.cert_estimate.total
+    : null;
+
+  return (
+    <div className="mb-5 rounded-2xl border border-line bg-card p-4">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold text-ink">{t("equatedTitle")}</p>
+        {delta !== null && (
+          <p className={`text-xs font-medium ${delta >= 0 ? "text-pos" : "text-neg"}`}>
+            {t("equatedDelta", { value: `${delta > 0 ? "+" : ""}${delta.toFixed(2)}` })}
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+        <div>
+          <p className="text-xs text-muted">{t("certHalfTest")}</p>
+          <p className="text-lg font-semibold text-ink">{e.estimate.test}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">{t("certHalfWritten")}</p>
+          <p className="text-lg font-semibold text-muted">{e.estimate.written}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">{t("certScaleTotal")}</p>
+          <p className="text-lg font-semibold text-ink">
+            {e.estimate.total}
+            <span className="ml-2 text-base font-bold text-brand">
+              {e.estimate.grade ?? t("certNoGrade")}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-xs">
+        <div>
+          <dt className="text-muted">{t("equatedMeasure")}</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums text-ink">
+            {e.measure !== null && `${e.measure > 0 ? "+" : ""}${e.measure.toFixed(2)}`}
+            {e.standard_error !== null && ` ± ${e.standard_error.toFixed(2)}`}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted">{t("equatedSolved")}</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums text-ink">
+            {t("equatedOutOf", {
+              n: attempt.test_correct ?? 0,
+              total: attempt.test_half_task_count,
+            })}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted">{t("equatedOnReference")}</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums text-ink">
+            {t("equatedOutOf", {
+              n: e.equated_correct ?? 0,
+              total: e.reference_length,
+            })}
+          </dd>
+        </div>
+      </dl>
+
+      <p className="mt-3 text-xs leading-snug text-muted">
+        {e.reference_exam_id === attempt.exam_id
+          ? t("equatedIsReference")
+          : t("equatedShared", { n: e.shared_with_reference })}
+        {" · "}
+        {t("equatedHint")}
+      </p>
+    </div>
+  );
+}
 
 /** Same token-protected blob loading as the homework review screen. */
 function TaskPhotos({ attemptId, task, count }: { attemptId: number; task: number; count: number }) {
@@ -204,6 +322,11 @@ export function CertAttemptPage() {
                 <p className="mt-3 text-xs leading-snug text-muted">{t("certScaleHint")}</p>
               </div>
             )}
+
+            {/* Второе число: та же формула, но по сумме, приведённой к шкале
+                эталонного варианта. Стоит НИЖЕ официального и подписано —
+                первым всегда идёт то, что считает государство. */}
+            {a.equated && <EquatedBlock attempt={a} />}
 
             <p className="mb-4 text-xs text-muted">
               {a.submitted_at ? formatDateTime(a.submitted_at) : "—"}
