@@ -155,6 +155,78 @@ const STRINGS = {
     uz: "Hech bir variantga kirmagan bank topshiriqlari",
   },
 
+  // --- шкала Раша ---
+  navRasch: { ru: "Шкала Раша", uz: "Rasch shkalasi" },
+  raschTitle: { ru: "Шкала Раша", uz: "Rasch shkalasi" },
+  raschSubtitle: {
+    ru: "Что модель говорит о банке целиком, а не об отдельном задании",
+    uz: "Model alohida topshiriq haqida emas, butun bank haqida nima deydi",
+  },
+  raschEmpty: {
+    ru: "Калибровки ещё не было или данных не хватило. Нажмите «Пересчитать»: трудность появляется у задания с {min} ответов.",
+    uz: "Kalibrlash hali bo'lmagan yoki ma'lumot yetmagan. «Qayta hisoblash»ni bosing: qiyinlik {min} javobdan boshlab paydo bo'ladi.",
+  },
+  raschSeparationTitle: { ru: "Разделяющая способность", uz: "Ajratish qobiliyati" },
+  raschStrata: { ru: "Различимых уровней", uz: "Ajratiladigan darajalar" },
+  raschReliability: { ru: "Надёжность", uz: "Ishonchlilik" },
+  raschIndex: { ru: "Индекс разделения", uz: "Ajratish indeksi" },
+  raschSeparationHint: {
+    ru: "Сколько групп подготовки этот банк реально различает на этих учениках. Меньше двух — тест делит только на «сильных и слабых».",
+    uz: "Bu bank shu o'quvchilarda nechta tayyorgarlik guruhini ajrata oladi. Ikkitadan kam bo'lsa — test faqat «kuchli va kuchsiz»ga bo'ladi.",
+  },
+  raschMapTitle: { ru: "Карта: ученики и задания на одной шкале", uz: "Xarita: o'quvchilar va topshiriqlar bir shkalada" },
+  raschMapHint: {
+    ru: "Слева — сколько учеников с такой подготовкой, справа — сколько заданий такой трудности. Задание работает там, где напротив него стоят ученики.",
+    uz: "Chapda — shunday tayyorgarlikdagi o'quvchilar soni, o'ngda — shunday qiyinlikdagi topshiriqlar soni. Topshiriq ro'parasida o'quvchilar turgan joyda ishlaydi.",
+  },
+  raschMapPersons: { ru: "Ученики", uz: "O'quvchilar" },
+  raschMapItems: { ru: "Задания", uz: "Topshiriqlar" },
+  raschMeanLine: { ru: "среднее {value}", uz: "o'rtacha {value}" },
+  raschBandsTitle: { ru: "Покрытие: где банку не хватает заданий", uz: "Qamrov: bankka topshiriq yetishmaydigan joylar" },
+  raschBandsHint: {
+    ru: "Полосы по полулогита в том диапазоне, где стоят ученики.",
+    uz: "O'quvchilar turgan oraliqda yarim logitlik yo'laklar.",
+  },
+  raschBandGap: { ru: "нет заданий", uz: "topshiriq yo'q" },
+  raschBandThin: { ru: "мало заданий", uz: "topshiriq kam" },
+  raschMisfitTitle: { ru: "Задания вне полосы соответствия", uz: "Moslik yo'lagidan tashqaridagi topshiriqlar" },
+  raschUnderfit: { ru: "Ведут себя непредсказуемо (outfit выше 1.5)", uz: "Oldindan aytib bo'lmaydi (outfit 1.5 dan yuqori)" },
+  raschUnderfitHint: {
+    ru: "Подготовленные ученики их проваливают. Обычно это ошибка в ключе или двусмысленная формулировка.",
+    uz: "Tayyor o'quvchilar ularni ishlay olmaydi. Odatda bu kalitdagi xato yoki noaniq ifoda.",
+  },
+  raschOverfit: { ru: "Слишком предсказуемы (outfit ниже 0.5)", uz: "Juda oldindan aytiladi (outfit 0.5 dan past)" },
+  raschOverfitHint: {
+    ru: "Повторяют то, что уже меряют соседние задания. Место в варианте тратится зря.",
+    uz: "Qo'shni topshiriqlar o'lchaganini takrorlaydi. Variantdagi joy behuda ketadi.",
+  },
+  raschMisfitNone: { ru: "Все задания в рабочей полосе.", uz: "Barcha topshiriqlar ishchi yo'lakda." },
+  raschLinksTitle: { ru: "Связанность вариантов", uz: "Variantlar bog'liqligi" },
+  raschLinksHint: {
+    ru: "Общие задания — единственное, что связывает шкалы двух вариантов. Без них результаты сравнивать нельзя.",
+    uz: "Umumiy topshiriqlar — ikki variant shkalasini bog'laydigan yagona narsa. Ularsiz natijalarni solishtirib bo'lmaydi.",
+  },
+  raschLinkShared: { ru: "общих: {n}", uz: "umumiy: {n}" },
+  raschLinkAlone: { ru: "нет общих заданий ни с одним вариантом", uz: "hech bir variant bilan umumiy topshiriq yo'q" },
+  raschLinkWeak: { ru: "меньше {need} — шкалы разъезжаются", uz: "{need} dan kam — shkalalar ajralib ketadi" },
+  raschCalibratedOf: { ru: "откалибровано {n} из {total}", uz: "{total} dan {n} kalibrlangan" },
+  raschScoreTitle: { ru: "Перевод: сумма верных → шкала", uz: "O'tkazish: to'g'ri javoblar → shkala" },
+  raschScoreHint: {
+    ru: "Здесь трудность заданий и входит в оценку ученика. Одна и та же сумма на трудном и лёгком вариантах даёт разный уровень.",
+    uz: "Topshiriq qiyinligi o'quvchi bahosiga aynan shu yerda kiradi. Bir xil yig'indi qiyin va oson variantda turli daraja beradi.",
+  },
+  raschScoreRaw: { ru: "Верных", uz: "To'g'ri" },
+  raschScoreLogit: { ru: "Уровень", uz: "Daraja" },
+  raschHistoryTitle: { ru: "История прогонов", uz: "Hisoblashlar tarixi" },
+  raschHistoryRow: {
+    ru: "учеников: {persons}, заданий: {items}",
+    uz: "o'quvchilar: {persons}, topshiriqlar: {items}",
+  },
+  raschHistoryHint: {
+    ru: "Трудность уточняется с накоплением ответов. Если она гуляет от прогона к прогону — дело в задании или в потоке, а не в модели.",
+    uz: "Qiyinlik javoblar to'planishi bilan aniqlashadi. Agar u hisoblashdan hisoblashga sakrasa — gap topshiriqda yoki oqimda.",
+  },
+
   // --- anchors ---
   anchorsLabel: { ru: "Якорей: {n} из {need}", uz: "Langarlar: {need} dan {n}" },
   anchorsTitle: { ru: "Якорные задания", uz: "Langar topshiriqlar" },

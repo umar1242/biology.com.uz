@@ -11,6 +11,7 @@ import { CertExamAttemptsPage } from "./pages/CertExamAttempts";
 import { CertAttemptPage } from "./pages/CertAttempt";
 import { BankItemsPage, ItemBankPage } from "./pages/ItemBank";
 import { ItemCardPage } from "./pages/ItemCard";
+import { RaschPage } from "./pages/Rasch";
 import { StudentsPage } from "./pages/Students";
 import { RemovalPage } from "./pages/Removal";
 import { AssistantsPage } from "./pages/Assistants";
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/bank/unused" element={<BankItemsPage />} />
           <Route path="/bank/variant/:examId" element={<BankItemsPage />} />
           <Route path="/bank/item/:id" element={<ItemCardPage />} />
+          <Route path="/rasch" element={<RaschPage />} />
           <Route path="/students" element={<StudentsPage />} />
           <Route path="/removal" element={<RemovalPage />} />
           <Route path="/assistants" element={<AssistantsPage />} />

@@ -1,0 +1,347 @@
+/**
+ * Сводка по всему банку в терминах модели Раша — то, что не помещается в
+ * карточку одного задания, потому что относится к паре «банк и ученики».
+ *
+ * Карточка отвечает на вопрос «что не так с этим вопросом». Здесь вопросы
+ * другие: попадает ли банк в тех, кто по нему учится; сколько уровней
+ * подготовки шкала вообще различает; сравнимы ли между собой варианты.
+ */
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { db } from "./../db/client.js";
+import {
+  certCalibrationRuns,
+  certExamItems,
+  certExams,
+  certItemCalibrations,
+  certItems,
+} from "../db/schema.js";
+import { itemCode } from "./certExam.js";
+import { collectResponses } from "./calibration.js";
+import {
+  calibrate,
+  calibrationState,
+  fitBand,
+  MIN_RESPONSES_PROVISIONAL,
+  MIN_RESPONSES_STABLE,
+  type CalibrationState,
+  type FitBand,
+} from "./rasch.js";
+
+/** Шаг гистограммы карты Райта. Мельче — рябь, крупнее — теряется форма. */
+const MAP_BIN = 0.25;
+
+/** Шаг полосы в разборе покрытия: полулогита хватает, чтобы дыра была дырой. */
+const BAND = 0.5;
+
+/**
+ * Ниже стольких учеников разделяющая способность не показывается.
+ *
+ * Формула посчитает её и на четверых, и число будет выглядеть как измерение —
+ * а это разброс четырёх точек. Порог тот же, что у трудности задания: тридцать.
+ */
+const MIN_PERSONS_FOR_SEPARATION = 30;
+
+export type OverviewItem = {
+  id: number;
+  code: string;
+  task_number: number;
+  difficulty: number;
+  standard_error: number;
+  infit: number;
+  outfit: number;
+  fit_band: FitBand;
+  responses: number;
+  state: CalibrationState;
+};
+
+export type RaschOverview = {
+  run: {
+    run_id: number;
+    run_at: string;
+    persons: number;
+    items: number;
+    converged: boolean;
+  } | null;
+  thresholds: { provisional: number; stable: number };
+  map: {
+    bin: number;
+    rows: { from: number; persons: number; items: number }[];
+    persons: number;
+    items: number;
+    person_mean: number | null;
+    item_mean: number | null;
+  };
+  bands: { from: number; persons: number; items: number }[];
+  separation: { index: number; reliability: number; strata: number } | null;
+  misfit: { underfit: OverviewItem[]; overfit: OverviewItem[] };
+  links: {
+    exam_id: number;
+    title: string;
+    items: number;
+    calibrated: number;
+    partners: { exam_id: number; title: string; shared: number }[];
+  }[];
+  score_tables: {
+    exam_id: number;
+    title: string;
+    items: number;
+    rows: { raw: number; logit: number }[];
+  }[];
+  history: { run_id: number; run_at: string; persons: number; items: number }[];
+};
+
+const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+
+function histogram(values: number[], bin: number): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const v of values) {
+    const key = Math.floor(v / bin) * bin;
+    out.set(key, (out.get(key) ?? 0) + 1);
+  }
+  return out;
+}
+
+/**
+ * Сколько уровней подготовки шкала различает.
+ *
+ * Наблюдаемый разброс оценок складывается из настоящего разброса подготовки и
+ * ошибки измерения; вычитая вторую, получаем первый. Отношение одного к другому
+ * и есть индекс разделения G, а (4G+1)/3 — привычное «число страт»: сколько
+ * статистически различимых групп получается из этих учеников этим тестом.
+ */
+function separation(abilities: number[], errors: number[]) {
+  if (abilities.length < 2) return null;
+  const m = mean(abilities);
+  const observedVar = mean(abilities.map((a) => (a - m) ** 2));
+  const mse = mean(errors.map((e) => e * e));
+  const trueVar = Math.max(observedVar - mse, 0);
+  if (mse <= 0) return null;
+  const index = Math.sqrt(trueVar / mse);
+  return {
+    index,
+    reliability: (index * index) / (1 + index * index),
+    strata: (4 * index + 1) / 3,
+  };
+}
+
+/**
+ * Таблица «сумма верных → логит» для одного варианта: то самое место, где
+ * трудность заданий входит в оценку ученика. Ожидаемая сумма при подготовке θ
+ * равна сумме вероятностей по заданиям варианта, и она строго растёт по θ —
+ * поэтому обратная задача решается делением пополам, без производных.
+ */
+function scoreTable(difficulties: number[]): { raw: number; logit: number }[] {
+  const expected = (theta: number) =>
+    difficulties.reduce((s, b) => s + 1 / (1 + Math.exp(-(theta - b))), 0);
+
+  const rows: { raw: number; logit: number }[] = [];
+  for (let raw = 1; raw < difficulties.length; raw += 1) {
+    let lo = -7;
+    let hi = 7;
+    for (let i = 0; i < 60; i += 1) {
+      const mid = (lo + hi) / 2;
+      if (expected(mid) < raw) lo = mid;
+      else hi = mid;
+    }
+    rows.push({ raw, logit: Math.round(((lo + hi) / 2) * 100) / 100 });
+  }
+  return rows;
+}
+
+export async function buildOverview(teacherId: number): Promise<RaschOverview> {
+  const thresholds = { provisional: MIN_RESPONSES_PROVISIONAL, stable: MIN_RESPONSES_STABLE };
+
+  const runs = await db
+    .select()
+    .from(certCalibrationRuns)
+    .where(eq(certCalibrationRuns.teacherId, teacherId))
+    .orderBy(desc(certCalibrationRuns.runAt))
+    .limit(10);
+
+  const history = runs.map((r) => ({
+    run_id: r.id,
+    run_at: r.runAt.toISOString(),
+    persons: r.persons,
+    items: r.items,
+  }));
+
+  const empty: RaschOverview = {
+    run: null,
+    thresholds,
+    map: { bin: MAP_BIN, rows: [], persons: 0, items: 0, person_mean: null, item_mean: null },
+    bands: [],
+    separation: null,
+    misfit: { underfit: [], overfit: [] },
+    links: [],
+    score_tables: [],
+    history,
+  };
+  const latest = runs[0];
+  if (!latest) return empty;
+
+  const calibrations = await db
+    .select()
+    .from(certItemCalibrations)
+    .where(eq(certItemCalibrations.runId, latest.id));
+  if (calibrations.length === 0) return empty;
+
+  const itemRows = await db
+    .select({ id: certItems.id, taskNumber: certItems.taskNumber })
+    .from(certItems)
+    .where(
+      and(
+        eq(certItems.teacherId, teacherId),
+        inArray(
+          certItems.id,
+          calibrations.map((c) => c.itemId),
+        ),
+      ),
+    );
+  const taskById = new Map(itemRows.map((r) => [r.id, r.taskNumber]));
+
+  // Ниже порога число не показывается нигде в платформе — и здесь тоже, иначе
+  // страница про качество измерения сама начнёт показывать шум.
+  const shown: OverviewItem[] = calibrations
+    .filter((c) => calibrationState(c.responses) !== "none")
+    .map((c) => ({
+      id: c.itemId,
+      code: itemCode(c.itemId, taskById.get(c.itemId) ?? 0),
+      task_number: taskById.get(c.itemId) ?? 0,
+      difficulty: c.difficulty,
+      standard_error: c.standardError,
+      infit: c.infit,
+      outfit: c.outfit,
+      fit_band: fitBand(c.outfit),
+      responses: c.responses,
+      state: calibrationState(c.responses),
+    }))
+    .sort((a, b) => a.difficulty - b.difficulty);
+
+  // --- способности учеников ------------------------------------------
+  // В базу они не ложатся: калибровка считает их и выбрасывает. Здесь они
+  // нужны для карты, и считаются заново при зафиксированных трудностях —
+  // задача одномерная и решается мгновенно.
+  // Ни одно задание не набрало порога — значит показывать нечего, и карта из
+  // одних учеников без заданий напротив них хуже пустого места: она выглядит
+  // как измерение, которого не было.
+  const runInfo = {
+    run_id: latest.id,
+    run_at: latest.runAt.toISOString(),
+    persons: latest.persons,
+    items: latest.items,
+    converged: latest.converged,
+  };
+  if (shown.length === 0) return { ...empty, run: runInfo };
+
+  const responses = await collectResponses(teacherId);
+  const anchors = new Map(calibrations.map((c) => [c.itemId, c.difficulty]));
+  const persons = responses.length > 0 ? calibrate(responses, { anchors }).persons : [];
+
+  const abilities = persons.map((p) => p.ability);
+  const itemDifficulties = shown.map((i) => i.difficulty);
+
+  const personHist = histogram(abilities, MAP_BIN);
+  const itemHist = histogram(itemDifficulties, MAP_BIN);
+  const keys = [...new Set([...personHist.keys(), ...itemHist.keys()])].sort((a, b) => a - b);
+  const rows = keys.map((from) => ({
+    from: Math.round(from * 100) / 100,
+    persons: personHist.get(from) ?? 0,
+    items: itemHist.get(from) ?? 0,
+  }));
+
+  // --- полосы покрытия -------------------------------------------------
+  // Только там, где стоят ученики: пустая полоса выше всех учеников — не
+  // дыра, а просто край шкалы.
+  const bands: { from: number; persons: number; items: number }[] = [];
+  if (abilities.length > 0) {
+    const lo = Math.floor(Math.min(...abilities) / BAND) * BAND;
+    const hi = Math.ceil(Math.max(...abilities) / BAND) * BAND;
+    for (let from = lo; from < hi; from += BAND) {
+      const to = from + BAND;
+      bands.push({
+        from: Math.round(from * 100) / 100,
+        persons: abilities.filter((a) => a >= from && a < to).length,
+        items: itemDifficulties.filter((d) => d >= from && d < to).length,
+      });
+    }
+  }
+
+  // --- связанность вариантов -------------------------------------------
+  const exams = await db
+    .select({ id: certExams.id, title: certExams.title })
+    .from(certExams)
+    .where(eq(certExams.teacherId, teacherId));
+  const examItems = await db
+    .select({ examId: certExamItems.examId, itemId: certExamItems.itemId })
+    .from(certExamItems)
+    .innerJoin(certExams, eq(certExams.id, certExamItems.examId))
+    .where(eq(certExams.teacherId, teacherId));
+
+  const itemsByExam = new Map<number, Set<number>>();
+  for (const r of examItems) {
+    const set = itemsByExam.get(r.examId) ?? new Set<number>();
+    set.add(r.itemId);
+    itemsByExam.set(r.examId, set);
+  }
+  const calibratedIds = new Set(shown.map((i) => i.id));
+
+  const links = exams.map((e) => {
+    const own = itemsByExam.get(e.id) ?? new Set<number>();
+    return {
+      exam_id: e.id,
+      title: e.title,
+      items: own.size,
+      calibrated: [...own].filter((id) => calibratedIds.has(id)).length,
+      partners: exams
+        .filter((o) => o.id !== e.id)
+        .map((o) => {
+          const other = itemsByExam.get(o.id) ?? new Set<number>();
+          return {
+            exam_id: o.id,
+            title: o.title,
+            shared: [...own].filter((id) => other.has(id)).length,
+          };
+        })
+        .filter((p) => p.shared > 0),
+    };
+  });
+
+  // --- таблицы перевода -------------------------------------------------
+  const difficultyById = new Map(shown.map((i) => [i.id, i.difficulty]));
+  const score_tables = exams
+    .map((e) => {
+      const own = [...(itemsByExam.get(e.id) ?? new Set<number>())]
+        .map((id) => difficultyById.get(id))
+        .filter((b): b is number => b !== undefined);
+      return { exam_id: e.id, title: e.title, items: own.length, rows: scoreTable(own) };
+    })
+    .filter((t) => t.items >= 5);
+
+  return {
+    run: runInfo,
+    thresholds,
+    map: {
+      bin: MAP_BIN,
+      rows,
+      persons: abilities.length,
+      items: shown.length,
+      person_mean: abilities.length ? mean(abilities) : null,
+      item_mean: shown.length ? mean(itemDifficulties) : null,
+    },
+    bands,
+    separation:
+      abilities.length >= MIN_PERSONS_FOR_SEPARATION
+        ? separation(
+            abilities,
+            persons.map((p) => p.standardError),
+          )
+        : null,
+    misfit: {
+      underfit: shown.filter((i) => i.outfit > 1.5).sort((a, b) => b.outfit - a.outfit),
+      overfit: shown.filter((i) => i.outfit < 0.5).sort((a, b) => a.outfit - b.outfit),
+    },
+    links,
+    score_tables,
+    history,
+  };
+}

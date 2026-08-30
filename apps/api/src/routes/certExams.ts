@@ -21,6 +21,7 @@ import {
   runCalibration,
 } from "../lib/calibration.js";
 import { calibrationState, fitBand, MIN_RESPONSES_PROVISIONAL } from "../lib/rasch.js";
+import { buildOverview } from "../lib/raschOverview.js";
 import { accessibleCourseIds, loadAccessibleCourse } from "../lib/access.js";
 import { Conflict, NotFound, Unprocessable } from "../lib/errors.js";
 import { createPendingActionDeepLink } from "../telegram/pendingActions.js";
@@ -321,6 +322,16 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
    * told apart only by a code. Browsing by variant matches how the questions
    * were entered in the first place — one variant at a time.
    */
+  /**
+   * Всё, что модель Раша говорит о банке целиком, а не об одном задании:
+   * карта «ученики против заданий», разделяющая способность, задания вне
+   * полосы соответствия, связанность вариантов и таблицы перевода.
+   */
+  app.get("/cert-calibration/overview", async (request) => {
+    const auth = requireAuth(request);
+    return buildOverview(auth.teacherId);
+  });
+
   app.get("/cert-items/variants", async (request) => {
     const auth = requireAuth(request);
 

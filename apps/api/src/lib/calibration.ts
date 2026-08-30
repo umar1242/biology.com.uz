@@ -19,7 +19,7 @@ import { calibrate, calibrationState, type RaschResponse } from "./rasch.js";
  * legitimate here only because items keep their identity in the bank: the same
  * question asked in two variants is the same column.
  */
-async function collectResponses(teacherId: number): Promise<RaschResponse[]> {
+export async function collectResponses(teacherId: number): Promise<RaschResponse[]> {
   const rows = await db
     .select({
       itemId: certExamAnswers.itemId,
