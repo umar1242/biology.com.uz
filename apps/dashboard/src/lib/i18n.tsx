@@ -130,6 +130,30 @@ const STRINGS = {
   bankFilterAll: { ru: "Все", uz: "Barchasi" },
   bankFilterProblem: { ru: "Проблемные", uz: "Muammoli" },
   bankSaved: { ru: "Сохранено", uz: "Saqlandi" },
+  bankVariantsSubtitle: {
+    ru: "Выберите вариант, чтобы увидеть его задания",
+    uz: "Topshiriqlarini ko'rish uchun variantni tanlang",
+  },
+  bankAllItems: { ru: "Все задания банка", uz: "Bankdagi barcha topshiriqlar" },
+  bankAllItemsHint: {
+    ru: "Один список без разбивки по вариантам",
+    uz: "Variantlarga bo'linmagan yagona ro'yxat",
+  },
+  bankItemsCount: { ru: "Заданий: {n}", uz: "Topshiriqlar: {n}" },
+  bankProblemsCount: { ru: "Проблемных: {n}", uz: "Muammoli: {n}" },
+  bankNoVariants: {
+    ru: "Вариантов пока нет. Создайте вариант в разделе «Сертификат».",
+    uz: "Hozircha variant yo'q. «Sertifikat» bo'limida variant yarating.",
+  },
+  bankVariantEmpty: {
+    ru: "В этом варианте пока нет заданий: заполните ключ варианта.",
+    uz: "Bu variantda hali topshiriq yo'q: variant kalitini to'ldiring.",
+  },
+  bankUnusedItems: { ru: "Вне вариантов", uz: "Variantlardan tashqarida" },
+  bankUnusedHint: {
+    ru: "Задания банка, которые пока не входят ни в один вариант",
+    uz: "Hech bir variantga kirmagan bank topshiriqlari",
+  },
 
   // --- anchors ---
   anchorsLabel: { ru: "Якорей: {n} из {need}", uz: "Langarlar: {need} dan {n}" },

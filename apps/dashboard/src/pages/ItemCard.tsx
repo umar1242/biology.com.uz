@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { AlertTriangle, Archive, RotateCcw } from "lucide-react";
 import { TopBar } from "../components/TopBar";
 import { apiFetch, ApiError } from "../lib/api";
@@ -270,6 +270,10 @@ function splitEvenly(total: number, parts: number): number[] {
 
 export function ItemCardPage() {
   const { id } = useParams();
+  // The folder the card was opened from, so «назад» returns to that variant
+  // rather than to the root of the bank.
+  const location = useLocation();
+  const backTo = (location.state as { from?: string } | null)?.from ?? "/bank";
   const { t, formatDateTime } = useI18n();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState({ stem: "", author: "", notes: "", cognitive: "" });
@@ -307,7 +311,7 @@ export function ItemCardPage() {
 
   return (
     <>
-      <TopBar title={c ? `${t("cardTitle")} ${c.code}` : t("cardTitle")} backTo="/bank" />
+      <TopBar title={c ? `${t("cardTitle")} ${c.code}` : t("cardTitle")} backTo={backTo} />
       <main className="max-w-4xl px-4 pb-10 sm:px-8">
         {card.isLoading && <p className="text-sm text-muted">{t("loading")}</p>}
 

@@ -1,7 +1,17 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, Minus, Pencil, RefreshCw, TrendingUp, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ChevronRight,
+  Layers,
+  Minus,
+  Pencil,
+  RefreshCw,
+  TrendingUp,
+  XCircle,
+} from "lucide-react";
 import { TopBar } from "../components/TopBar";
 import { apiFetch, ApiError } from "../lib/api";
 import { useI18n, type StringKey } from "../lib/i18n";
@@ -10,6 +20,8 @@ type DiscBand = "good" | "ok" | "weak" | "broken";
 
 type BankItem = {
   id: number;
+  /** «41-0041» — task number plus bank id. The item's name in the UI. */
+  code: string;
   task_number: number;
   topic: string;
   source_ref: string | null;
@@ -17,6 +29,7 @@ type BankItem = {
   is_closed: boolean;
   max_points: number;
   used_in_variants: number;
+  exam_ids: number[];
   responses: number;
   p_value: number | null;
   most_chosen: string | null;
@@ -285,26 +298,107 @@ function CalibrationBar() {
   );
 }
 
-export function ItemBankPage() {
-  const { t } = useI18n();
-  const navigate = useNavigate();
-  const [onlyProblems, setOnlyProblems] = useState(false);
-  const [sort, setSort] = useState<"task" | "difficulty" | "discrimination">("task");
+type BankVariant = {
+  id: number;
+  title: string;
+  course_id: number;
+  course_title: string;
+  published: boolean;
+  deadline_at: string;
+  created_at: string;
+  item_count: number;
+};
 
-  const items = useQuery({
-    queryKey: ["cert-items"],
-    queryFn: () => apiFetch<BankItem[]>("/cert-items"),
-  });
-
-  const all = useMemo(() => items.data ?? [], [items.data]);
-
-  const isProblem = (i: BankItem) =>
+/** A question worth the teacher's attention: bad key, no discrimination, or
+    a share correct outside the band where it sorts anyone. */
+function isProblem(i: BankItem) {
+  return (
     i.suspect_key ||
     i.discrimination_band === "broken" ||
     i.discrimination_band === "weak" ||
     (i.p_value !== null &&
       i.responses >= MIN_RESPONSES_FOR_VERDICT &&
-      (i.p_value > GOOD_HIGH || i.p_value < GOOD_LOW));
+      (i.p_value > GOOD_HIGH || i.p_value < GOOD_LOW))
+  );
+}
+
+function useBankItems() {
+  return useQuery({
+    queryKey: ["cert-items"],
+    queryFn: () => apiFetch<BankItem[]>("/cert-items"),
+  });
+}
+
+/** One row of the folder view: a variant, or one of the two virtual folders. */
+function BankFolder({
+  title,
+  subtitle,
+  count,
+  problems,
+  chip,
+  to,
+}: {
+  title: string;
+  subtitle: string;
+  count: number;
+  problems: number;
+  chip?: string;
+  to: string;
+}) {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(to)}
+      className="flex w-full items-center gap-4 rounded-2xl border border-line bg-card p-4 text-left transition-colors hover:border-brand"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-inset text-muted">
+        <Layers size={18} />
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="truncate text-sm font-semibold text-ink">{title}</span>
+          {chip && (
+            <span className="rounded-full bg-inset px-2 py-0.5 text-[11px] text-muted">{chip}</span>
+          )}
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-muted">{subtitle}</span>
+      </span>
+
+      <span className="shrink-0 text-right">
+        <span className="block text-sm font-semibold tabular-nums text-ink">
+          {t("bankItemsCount", { n: count })}
+        </span>
+        {problems > 0 && (
+          <span className="block text-xs text-warn">{t("bankProblemsCount", { n: problems })}</span>
+        )}
+      </span>
+
+      <ChevronRight size={16} className="shrink-0 text-muted" />
+    </button>
+  );
+}
+
+/**
+ * The bank's front door: variants first, questions second.
+ *
+ * A flat bank sorted by task number interleaves every variant's «задание 5»,
+ * and the teacher's own mental index is the variant they typed the key from —
+ * so that is what the first screen offers. The two virtual folders below keep
+ * the old flat view reachable and surface the items no variant uses.
+ */
+export function ItemBankPage() {
+  const { t } = useI18n();
+  const items = useBankItems();
+  const variants = useQuery({
+    queryKey: ["cert-item-variants"],
+    queryFn: () => apiFetch<BankVariant[]>("/cert-items/variants"),
+  });
+
+  const all = useMemo(() => items.data ?? [], [items.data]);
 
   const summary = useMemo(
     () => ({
@@ -315,6 +409,124 @@ export function ItemBankPage() {
     }),
     [all],
   );
+
+  // Per-variant counts are derived from the item list the page already
+  // loads, so the folder view costs one extra request and no extra math
+  // on the server.
+  const byVariant = useMemo(() => {
+    const map = new Map<number, { count: number; problems: number }>();
+    for (const item of all) {
+      const problem = isProblem(item);
+      for (const examId of item.exam_ids) {
+        const cur = map.get(examId) ?? { count: 0, problems: 0 };
+        cur.count += 1;
+        if (problem) cur.problems += 1;
+        map.set(examId, cur);
+      }
+    }
+    return map;
+  }, [all]);
+
+  const unused = useMemo(() => all.filter((i) => i.exam_ids.length === 0), [all]);
+
+  return (
+    <>
+      <TopBar title={t("bankTitle")} />
+      <main className="px-4 pb-10 sm:px-8">
+        <p className="mb-5 text-sm text-muted">{t("bankVariantsSubtitle")}</p>
+
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile label={t("statTotal")} value={summary.total} />
+          <StatTile label={t("statNeedKey")} value={summary.suspectKey} tone="text-neg" />
+          <StatTile label={t("statNoDiscriminate")} value={summary.weak} tone="text-warn" />
+          <StatTile label={t("statNoData")} value={summary.noData} tone="text-muted" />
+        </div>
+
+        <CalibrationBar />
+
+        {(items.isLoading || variants.isLoading) && (
+          <p className="text-sm text-muted">{t("loading")}</p>
+        )}
+
+        <div className="flex flex-col gap-2">
+          {(variants.data ?? []).map((v) => {
+            const stat = byVariant.get(v.id) ?? { count: v.item_count, problems: 0 };
+            return (
+              <BankFolder
+                key={v.id}
+                title={v.title}
+                subtitle={v.course_title}
+                chip={v.published ? t("certPublished") : t("certDraft")}
+                count={stat.count}
+                problems={stat.problems}
+                to={`/bank/variant/${v.id}`}
+              />
+            );
+          })}
+
+          {variants.data?.length === 0 && !variants.isLoading && (
+            <p className="text-sm text-muted">{t("bankNoVariants")}</p>
+          )}
+
+          {all.length > 0 && (
+            <>
+              <div className="mt-4" />
+              <BankFolder
+                title={t("bankAllItems")}
+                subtitle={t("bankAllItemsHint")}
+                count={all.length}
+                problems={all.filter(isProblem).length}
+                to="/bank/all"
+              />
+              {unused.length > 0 && (
+                <BankFolder
+                  title={t("bankUnusedItems")}
+                  subtitle={t("bankUnusedHint")}
+                  count={unused.length}
+                  problems={unused.filter(isProblem).length}
+                  to="/bank/unused"
+                />
+              )}
+            </>
+          )}
+        </div>
+      </main>
+    </>
+  );
+}
+
+/**
+ * The questions themselves, for one variant or for the whole bank. Reached
+ * only through the folder view above, so it always knows what it is showing
+ * and can say so in the title bar.
+ */
+export function BankItemsPage() {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams<{ examId?: string }>();
+  const examId = params.examId ? Number(params.examId) : null;
+  const scope: "variant" | "unused" | "all" =
+    examId !== null ? "variant" : location.pathname.endsWith("/unused") ? "unused" : "all";
+
+  const [onlyProblems, setOnlyProblems] = useState(false);
+  const [sort, setSort] = useState<"task" | "difficulty" | "discrimination">("task");
+
+  const items = useBankItems();
+  const variants = useQuery({
+    queryKey: ["cert-item-variants"],
+    queryFn: () => apiFetch<BankVariant[]>("/cert-items/variants"),
+    enabled: scope === "variant",
+  });
+
+  const variant = variants.data?.find((v) => v.id === examId) ?? null;
+
+  const all = useMemo(() => {
+    const list = items.data ?? [];
+    if (scope === "variant") return list.filter((i) => i.exam_ids.includes(examId as number));
+    if (scope === "unused") return list.filter((i) => i.exam_ids.length === 0);
+    return list;
+  }, [items.data, scope, examId]);
 
   const shown = useMemo(() => {
     const list = onlyProblems ? all.filter(isProblem) : [...all];
@@ -333,18 +545,26 @@ export function ItemBankPage() {
     return list.sort((a, b) => a.task_number - b.task_number || a.id - b.id);
   }, [all, onlyProblems, sort]);
 
+  const title =
+    scope === "variant"
+      ? (variant?.title ?? t("bankTitle"))
+      : scope === "unused"
+        ? t("bankUnusedItems")
+        : t("bankAllItems");
+
+  // Coming back from a card should land on the same folder, not the root.
+  const openCard = (id: number) =>
+    navigate(`/bank/item/${id}`, { state: { from: location.pathname } });
+
+  const emptyText = scope === "variant" ? t("bankVariantEmpty") : t("bankEmpty");
+
   return (
     <>
-      <TopBar title={t("bankTitle")} />
+      <TopBar title={title} backTo="/bank" />
       <main className="px-4 pb-10 sm:px-8">
-        <p className="mb-5 text-sm text-muted">{t("bankSubtitle")}</p>
-
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label={t("statTotal")} value={summary.total} />
-          <StatTile label={t("statNeedKey")} value={summary.suspectKey} tone="text-neg" />
-          <StatTile label={t("statNoDiscriminate")} value={summary.weak} tone="text-warn" />
-          <StatTile label={t("statNoData")} value={summary.noData} tone="text-muted" />
-        </div>
+        <p className="mb-5 text-sm text-muted">
+          {scope === "variant" ? (variant?.course_title ?? t("bankSubtitle")) : t("bankSubtitle")}
+        </p>
 
         {/* Both metrics are unfamiliar; without this the numbers are decoration. */}
         <div className="mb-6 rounded-2xl border border-line bg-inset p-4">
@@ -356,8 +576,6 @@ export function ItemBankPage() {
             <span className="font-medium text-ink">{t("discTitle")}</span> — {t("discExplain")}
           </p>
         </div>
-
-        <CalibrationBar />
 
         <div className="mb-5 flex flex-wrap items-center gap-2">
           {[
@@ -391,9 +609,7 @@ export function ItemBankPage() {
         </div>
 
         {items.isLoading && <p className="text-sm text-muted">{t("loading")}</p>}
-        {all.length === 0 && !items.isLoading && (
-          <p className="text-sm text-muted">{t("bankEmpty")}</p>
-        )}
+        {all.length === 0 && !items.isLoading && <p className="text-sm text-muted">{emptyText}</p>}
 
         <div className="flex flex-col gap-2">
           {shown.map((item) => {
@@ -410,7 +626,7 @@ export function ItemBankPage() {
                 <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
                   <button
                     type="button"
-                    onClick={() => navigate(`/bank/${item.id}`)}
+                    onClick={() => openCard(item.id)}
                     title={t("cardTitle")}
                     className="mt-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-inset text-sm font-semibold tabular-nums text-muted hover:bg-brand hover:text-on-brand"
                   >
@@ -418,14 +634,22 @@ export function ItemBankPage() {
                   </button>
 
                   <div className="mt-4 min-w-0 flex-1 basis-48">
+                    {/* The code, not the topic: nine topic names spread over
+                        hundreds of questions name nothing in particular,
+                        while the code addresses exactly this one. */}
                     <button
                       type="button"
-                      onClick={() => navigate(`/bank/${item.id}`)}
-                      className="block max-w-full truncate text-left text-sm font-medium text-ink hover:underline"
+                      onClick={() => openCard(item.id)}
+                      className="block max-w-full truncate text-left text-sm font-semibold tabular-nums text-ink hover:underline"
                     >
-                      {t(TOPIC_KEYS[item.topic] ?? "bankTopic")}
+                      {item.code}
                     </button>
-                    <SourceEditor item={item} />
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-xs text-muted">
+                        {t(TOPIC_KEYS[item.topic] ?? "bankTopic")}
+                      </span>
+                      <SourceEditor item={item} />
+                    </div>
                   </div>
 
                   {/* Every metric column shares one grid: a 16px caption line

@@ -9,6 +9,7 @@ import {
   certExams,
   certItems,
   certItemAnswerKeys,
+  courses,
   staffUsers,
   students,
 } from "../db/schema.js";
@@ -312,6 +313,54 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
    * single grouped scan, and a cached table would only add a way for the
    * figures to go stale.
    */
+  /**
+   * The variants a bank item can belong to, as the first screen of the bank.
+   *
+   * A flat list of every question sorted by task number puts the second
+   * variant's «задание 5» directly under the first variant's, and the two are
+   * told apart only by a code. Browsing by variant matches how the questions
+   * were entered in the first place — one variant at a time.
+   */
+  app.get("/cert-items/variants", async (request) => {
+    const auth = requireAuth(request);
+
+    const conditions = [eq(certExams.teacherId, auth.teacherId)];
+    const allowed = await accessibleCourseIds(auth);
+    if (allowed !== null) {
+      if (allowed.length === 0) return [];
+      conditions.push(inArray(certExams.courseId, allowed));
+    }
+
+    const rows = await db
+      .select({
+        id: certExams.id,
+        title: certExams.title,
+        courseId: certExams.courseId,
+        courseTitle: courses.title,
+        publishedAt: certExams.publishedAt,
+        deadlineAt: certExams.deadlineAt,
+        createdAt: certExams.createdAt,
+        itemCount: sql<number>`(
+          SELECT count(*)::int FROM cert_exam_items ei WHERE ei.exam_id = ${certExams.id}
+        )`,
+      })
+      .from(certExams)
+      .innerJoin(courses, eq(courses.id, certExams.courseId))
+      .where(and(...conditions))
+      .orderBy(sql`${certExams.createdAt} DESC`);
+
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      course_id: r.courseId,
+      course_title: r.courseTitle,
+      published: r.publishedAt !== null,
+      deadline_at: r.deadlineAt,
+      created_at: r.createdAt,
+      item_count: r.itemCount,
+    }));
+  });
+
   app.get("/cert-items", async (request) => {
     const auth = requireAuth(request);
     const query = request.query as { topic?: string; task_number?: string };
@@ -338,9 +387,6 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         // share of the maximum the teacher actually awarded.
         pointsAwarded: sql<number>`coalesce(sum(${certExamAnswers.awardedPoints}), 0)::int`,
         pointsGraded: sql<number>`count(${certExamAnswers.awardedPoints})::int`,
-        usedInVariants: sql<number>`(
-          SELECT count(*)::int FROM cert_exam_items ei WHERE ei.item_id = ${certItems.id}
-        )`,
       })
       .from(certItems)
       .leftJoin(certExamAnswers, eq(certExamAnswers.itemId, certItems.id))
@@ -369,6 +415,22 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       )
       .groupBy(certExamAnswers.itemId, certExamAnswers.chosenOption);
 
+    // Which variants each item sits in. Fetched as one list rather than a
+    // correlated count per row, because the bank is now browsed variant by
+    // variant and the client needs the ids themselves, not just how many.
+    const usage = await db
+      .select({ itemId: certExamItems.itemId, examId: certExamItems.examId })
+      .from(certExamItems)
+      .innerJoin(certItems, eq(certItems.id, certExamItems.itemId))
+      .where(eq(certItems.teacherId, auth.teacherId));
+
+    const examIdsByItem = new Map<number, number[]>();
+    for (const u of usage) {
+      const list = examIdsByItem.get(u.itemId);
+      if (list) list.push(u.examId);
+      else examIdsByItem.set(u.itemId, [u.examId]);
+    }
+
     const discrimination = await discriminationByItem(auth.teacherId);
     const calibration = await latestCalibrationByItem(auth.teacherId);
     const responseCounts = await responseCountByItem(auth.teacherId);
@@ -392,8 +454,14 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
       const cal = calibration.get(r.id) ?? null;
       const calResponses = responseCounts.get(r.id) ?? 0;
 
+      const examIds = examIdsByItem.get(r.id) ?? [];
+
       return {
         id: r.id,
+        // The bank is addressed by code, not by topic name: a topic repeats
+        // across dozens of questions, the code is the one label that names
+        // exactly this question.
+        code: itemCode(r.id, r.taskNumber),
         task_number: r.taskNumber,
         topic: r.topic,
         source_ref: r.sourceRef,
@@ -401,7 +469,8 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         grading_mode: r.gradingMode,
         is_closed: closed,
         max_points: maxPoints,
-        used_in_variants: r.usedInVariants,
+        used_in_variants: examIds.length,
+        exam_ids: examIds,
         responses: closed ? r.responses : r.pointsGraded,
         // Share correct (closed) or share of maximum awarded (open). null
         // until anyone has actually been graded on it.

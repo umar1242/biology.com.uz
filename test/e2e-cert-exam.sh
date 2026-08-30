@@ -317,6 +317,18 @@ SAME=$(PSQL "SELECT item_id FROM cert_exam_items WHERE exam_id=$EXAM2 AND task_n
 chk "same bank item in both variants" "$ITEM1" "$SAME" "item=$SAME"
 req GET /cert-items "" "$TT"
 chk "item now used in 2 variants" "2" "$(echo "$RB" | jq -r "[.[]|select(.id==$ITEM1)][0].used_in_variants")" "$RB"
+chk "item carries both variant ids" "2" "$(echo "$RB" | jq -r "[.[]|select(.id==$ITEM1)][0].exam_ids|length")" "$RB"
+chk "item code is task-id" "true" "$(echo "$RB" | jq -r "[.[]|select(.id==$ITEM1)][0].code|test(\"^1-0*$ITEM1\$\")")" "$RB"
+
+echo "== BANK BY VARIANT =="
+req GET /cert-items/variants "" "$TT"
+chk "variants listed for the bank" 200 "$RS" "$RB"
+chk "both variants present" "1" "$(echo "$RB" | jq -r "[.[]|select(.id==$EXAM2)]|length")" "$RB"
+EXAM2N=$(PSQL "SELECT count(*) FROM cert_exam_items WHERE exam_id=$EXAM2;" | tr -d ' ')
+chk "variant item count matches db" "$EXAM2N" "$(echo "$RB" | jq -r "[.[]|select(.id==$EXAM2)][0].item_count")" "$RB"
+chk "variant carries course title" "true" "$(echo "$RB" | jq -r "[.[]|select(.id==$EXAM2)][0].course_title|length>0")" "$RB"
+req GET /cert-items/variants "" "$BT"
+chk "other tenant sees no variants of ours" "0" "$(echo "$RB" | jq -r "[.[]|select(.id==$EXAM or .id==$EXAM2)]|length")" "$RB"
 
 echo "== ANCHORS =="
 req GET "/cert-exams/$EXAM2" "" "$TT"

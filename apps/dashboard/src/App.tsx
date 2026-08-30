@@ -9,7 +9,7 @@ import { ReviewPage } from "./pages/Review";
 import { CertExamsPage } from "./pages/CertExams";
 import { CertExamAttemptsPage } from "./pages/CertExamAttempts";
 import { CertAttemptPage } from "./pages/CertAttempt";
-import { ItemBankPage } from "./pages/ItemBank";
+import { BankItemsPage, ItemBankPage } from "./pages/ItemBank";
 import { ItemCardPage } from "./pages/ItemCard";
 import { StudentsPage } from "./pages/Students";
 import { RemovalPage } from "./pages/Removal";
@@ -34,7 +34,10 @@ export default function App() {
           <Route path="/cert/:id" element={<CertExamAttemptsPage />} />
           <Route path="/cert/attempts/:id" element={<CertAttemptPage />} />
           <Route path="/bank" element={<ItemBankPage />} />
-          <Route path="/bank/:id" element={<ItemCardPage />} />
+          <Route path="/bank/all" element={<BankItemsPage />} />
+          <Route path="/bank/unused" element={<BankItemsPage />} />
+          <Route path="/bank/variant/:examId" element={<BankItemsPage />} />
+          <Route path="/bank/item/:id" element={<ItemCardPage />} />
           <Route path="/students" element={<StudentsPage />} />
           <Route path="/removal" element={<RemovalPage />} />
           <Route path="/assistants" element={<AssistantsPage />} />
