@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   calibrate,
+  connectedComponents,
   calibrationState,
   fitBand,
   MIN_RESPONSES_PROVISIONAL,
@@ -223,4 +224,89 @@ test("fit bands name what a teacher should do about them", () => {
   assert.equal(fitBand(0.49), "overfit");
   assert.equal(fitBand(1.6), "underfit");
   assert.equal(fitBand(2.01), "degrading");
+});
+
+// --- связность матрицы -------------------------------------------------
+
+test("связный дизайн — один кусок", () => {
+  const responses = [
+    { personId: 1, itemId: 1, correct: true },
+    { personId: 1, itemId: 2, correct: false },
+    { personId: 2, itemId: 2, correct: true },
+    { personId: 2, itemId: 3, correct: false },
+  ];
+  assert.equal(connectedComponents(responses).length, 1);
+});
+
+test("два варианта без общих заданий и учеников — два куска", () => {
+  const responses = [
+    { personId: 1, itemId: 1, correct: true },
+    { personId: 1, itemId: 2, correct: false },
+    { personId: 2, itemId: 1, correct: false },
+    { personId: 3, itemId: 8, correct: true },
+    { personId: 3, itemId: 9, correct: false },
+    { personId: 4, itemId: 9, correct: true },
+  ];
+  const parts = connectedComponents(responses);
+  assert.equal(parts.length, 2);
+  assert.deepEqual(parts[0].items, [1, 2]);
+  assert.deepEqual(parts[1].items, [8, 9]);
+});
+
+test("общее задание связывает варианты", () => {
+  const responses = [
+    { personId: 1, itemId: 1, correct: true },
+    { personId: 1, itemId: 5, correct: false },
+    { personId: 2, itemId: 5, correct: true },
+    { personId: 2, itemId: 9, correct: false },
+  ];
+  assert.equal(connectedComponents(responses).length, 1);
+});
+
+test("общий ученик связывает варианты не хуже общего задания", () => {
+  // Ни одного общего задания, но человек писал оба варианта.
+  const responses = [
+    { personId: 1, itemId: 1, correct: true },
+    { personId: 1, itemId: 2, correct: false },
+    { personId: 1, itemId: 8, correct: true },
+    { personId: 1, itemId: 9, correct: false },
+    { personId: 2, itemId: 1, correct: false },
+    { personId: 3, itemId: 8, correct: true },
+  ];
+  assert.equal(connectedComponents(responses).length, 1);
+});
+
+test("несвязный кусок не получает оценок вовсе", () => {
+  const rand = makeRng(31);
+  const responses: { personId: number; itemId: number; correct: boolean }[] = [];
+  // Крупный кусок: 60 человек на заданиях 1..20.
+  for (let p = 1; p <= 60; p += 1) {
+    const theta = (rand() - 0.5) * 3;
+    for (let i = 1; i <= 20; i += 1) {
+      responses.push({
+        personId: p,
+        itemId: i,
+        correct: rand() < 1 / (1 + Math.exp(-(theta - (-2 + (4 * i) / 20)))),
+      });
+    }
+  }
+  // Отдельный кусок: 30 человек на заданиях 101..110, ни одного пересечения.
+  for (let p = 101; p <= 130; p += 1) {
+    const theta = (rand() - 0.5) * 3;
+    for (let i = 101; i <= 110; i += 1) {
+      responses.push({
+        personId: p,
+        itemId: i,
+        correct: rand() < 1 / (1 + Math.exp(-(theta - (-1 + (2 * (i - 100)) / 10)))),
+      });
+    }
+  }
+
+  const result = calibrate(responses);
+  assert.equal(result.components, 2);
+  assert.ok(result.items.every((i) => i.itemId <= 20), "оценены задания не того куска");
+  assert.ok(result.persons.every((p) => p.personId <= 60));
+  const dropped = result.excludedItems.filter((e) => e.reason === "disconnected");
+  assert.equal(dropped.length, 10);
+  assert.ok(dropped.every((e) => e.itemId >= 101));
 });

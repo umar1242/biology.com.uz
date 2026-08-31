@@ -62,6 +62,23 @@ const COHORT_SIZE = 60;
 const ANCHOR_TASKS = [4, 9, 14, 19, 24, 29, 33, 38];
 
 /**
+ * Один якорь «утёк»: когорта B решает его так, будто знала ответ заранее.
+ * Задание то же, вопрос тот же — а ведёт себя в двух вариантах по-разному,
+ * и связь, на нём построенная, кривая. Именно это должна поймать диагностика
+ * дрейфа, и без такого задания в данных она проверяется только на бумаге.
+ *
+ * Взято трудное задание, и не только для реализма (лёгкие никто не сливает).
+ * Утечка на лёгком уводит его почти в потолок: девять из десяти верных, из
+ * четырёх оставшихся ошибок трудность уже не оценить, и наблюдаемый дрейф
+ * сжимается вдвое против настоящего. Первым заходом якорь стоял на задании
+ * 19, дал 0.85 при z = 1.63 и до флага не дотянул — при истинной утечке 1.6.
+ */
+const LEAKED_ANCHOR_TASK = 33;
+
+/** Насколько легче стал утёкший якорь для второй когорты, в логитах. */
+const LEAK_SIZE = 1.6;
+
+/**
  * Одно намеренно испорченное задание в варианте B: в ключе стоит не та буква.
  * Самый частый настоящий дефект — и тот, который в банке ловят сразу три
  * независимых признака: чип «Проверьте ключ», отрицательная дискриминация и
@@ -75,6 +92,15 @@ const VARIANT_B_SHIFT = 0.5;
 
 /** Насколько когорта B сильнее когорты A, в логитах. */
 const COHORT_B_SHIFT = 0.9;
+
+/**
+ * Третий вариант заводится нарочно неправильно: ни одного общего задания с
+ * A и B и ни одного общего ученика. Он существует, чтобы показать, что
+ * платформа делает с таким вариантом — а делает она единственно верное:
+ * не считает его вовсе, вместо того чтобы выдать числа на собственной шкале,
+ * неотличимые с виду от остальных.
+ */
+const ORPHAN_COHORT_SIZE = 30;
 
 /** Только задания 1–40 дихотомичны; 41–43 оцениваются в баллах и в
  *  дихотомическую модель не входят (см. lib/calibration.ts). */
@@ -181,12 +207,14 @@ async function purge(): Promise<void> {
 
 // --- посев -------------------------------------------------------------
 
+type Variant = "A" | "B" | "C";
+
 type SeededItem = {
   id: number;
   task: number;
   key: string | null;
   trueDifficulty: number;
-  variant: "A" | "B";
+  variant: Variant;
   broken: boolean;
   /** Только у испорченного задания: буква, верная по смыслу, но не та, что в ключе. */
   truthOption?: string;
@@ -241,15 +269,23 @@ async function seed(): Promise<void> {
         deadlineAt: past,
         publishedAt: past,
       },
+      {
+        courseId: course.id,
+        teacherId,
+        title: "Демо-вариант C (без якорей)",
+        deadlineAt: past,
+        publishedAt: past,
+      },
     ])
     .returning({ id: certExams.id, title: certExams.title });
   const examA = examRows[0].id;
   const examB = examRows[1].id;
+  const examC = examRows[2].id;
 
   // --- задания -------------------------------------------------------
   const items: SeededItem[] = [];
 
-  const makeItems = async (variant: "A" | "B", tasks: number[], shift: number) => {
+  const makeItems = async (variant: Variant, tasks: number[], shift: number) => {
     const values = tasks.map((task) => {
       const b = trueDifficulty(task, shift);
       const key = keyFor(task);
@@ -300,11 +336,13 @@ async function seed(): Promise<void> {
     allTasks.filter((t) => !ANCHOR_TASKS.includes(t)),
     VARIANT_B_SHIFT,
   );
+  // У C свои задания на все 43 позиции: ни одного общего с A и B.
+  await makeItems("C", allTasks, 0.2);
 
   const byVariantTask = new Map<string, SeededItem>();
   for (const i of items) byVariantTask.set(`${i.variant}:${i.task}`, i);
 
-  const itemsOf = (variant: "A" | "B") =>
+  const itemsOf = (variant: Variant) =>
     allTasks.map((task) => {
       const own = byVariantTask.get(`${variant}:${task}`);
       if (own) return own;
@@ -316,6 +354,7 @@ async function seed(): Promise<void> {
   const examItems = [
     ...itemsOf("A").map((i) => ({ examId: examA, taskNumber: i.task, itemId: i.id })),
     ...itemsOf("B").map((i) => ({ examId: examB, taskNumber: i.task, itemId: i.id })),
+    ...itemsOf("C").map((i) => ({ examId: examC, taskNumber: i.task, itemId: i.id })),
   ];
   await db.insert(certExamItems).values(examItems);
 
@@ -324,14 +363,15 @@ async function seed(): Promise<void> {
   const matrixB: RaschResponse[] = [];
 
   let telegramId = TELEGRAM_BASE;
-  const abilities: { variant: "A" | "B"; ability: number }[] = [];
+  const abilities: { variant: Variant; ability: number }[] = [];
 
-  for (const [variant, examId, abilityShift] of [
-    ["A", examA, 0],
-    ["B", examB, COHORT_B_SHIFT],
+  for (const [variant, examId, abilityShift, size] of [
+    ["A", examA, 0, COHORT_SIZE],
+    ["B", examB, COHORT_B_SHIFT, COHORT_SIZE],
+    ["C", examC, 0.3, ORPHAN_COHORT_SIZE],
   ] as const) {
     const sheet = itemsOf(variant);
-    const studentValues = Array.from({ length: COHORT_SIZE }, (_, i) => ({
+    const studentValues = Array.from({ length: size }, (_, i) => ({
       telegramId: telegramId++,
       firstName: `Демо ${variant}${String(i + 1).padStart(2, "0")}`,
       lastName: "(симуляция)",
@@ -391,8 +431,11 @@ async function seed(): Promise<void> {
           continue;
         }
 
-        const knows = rand() < probability(ability, item.trueDifficulty);
-        const matrix = variant === "A" ? matrixA : matrixB;
+        const leaked = variant === "B" && item.task === LEAKED_ANCHOR_TASK;
+        const knows = rand() < probability(ability, item.trueDifficulty - (leaked ? LEAK_SIZE : 0));
+        // Вариант C в разборы якорей не идёт: он существует ради проверки
+        // связности, и подмешивать его в сравнение A с B нельзя.
+        const matrix = variant === "A" ? matrixA : variant === "B" ? matrixB : null;
 
         if (isClosedTask(task)) {
           const key = item.key as string;
@@ -414,7 +457,7 @@ async function seed(): Promise<void> {
             chosenOption: chosen,
             isCorrect: correct,
           });
-          matrix.push({ personId: s.id, itemId: item.id, correct });
+          matrix?.push({ personId: s.id, itemId: item.id, correct });
           continue;
         }
         {
@@ -422,7 +465,7 @@ async function seed(): Promise<void> {
           const points = correct ? maxPointsFor(task) : 0;
           manual += points;
           answers.push({ attemptId: 0, taskNumber: task, itemId: item.id, awardedPoints: points });
-          matrix.push({ personId: s.id, itemId: item.id, correct });
+          matrix?.push({ personId: s.id, itemId: item.id, correct });
         }
       }
 
@@ -450,8 +493,8 @@ async function seed(): Promise<void> {
   }
 
   console.log(
-    `Заведено: учитель #${teacherId}, курс #${course.id}, два варианта, ` +
-      `${items.length} заданий в банке, ${COHORT_SIZE * 2} участников.`,
+    `Заведено: учитель #${teacherId}, курс #${course.id}, три варианта, ` +
+      `${items.length} заданий в банке, ${COHORT_SIZE * 2 + ORPHAN_COHORT_SIZE} участников.`,
   );
 
   await report({ teacherId, items, matrixA, matrixB, abilities });
@@ -490,7 +533,7 @@ async function report(ctx: {
   items: SeededItem[];
   matrixA: RaschResponse[];
   matrixB: RaschResponse[];
-  abilities: { variant: "A" | "B"; ability: number }[];
+  abilities: { variant: Variant; ability: number }[];
 }): Promise<void> {
   const { teacherId, items, matrixA, matrixB, abilities } = ctx;
   const byId = new Map(items.map((i) => [i.id, i]));
@@ -512,14 +555,14 @@ async function report(ctx: {
   );
 
   // --- наивный взгляд -------------------------------------------------
-  const shareCorrect = (matrix: RaschResponse[], variant: "A" | "B") => {
+  const shareCorrect = (matrix: RaschResponse[], variant: Variant) => {
     const rows = matrix.filter((r) => {
       const item = byId.get(r.itemId);
       return item && (item.variant === variant || ANCHOR_TASKS.includes(item.task));
     });
     return rows.filter((r) => r.correct).length / rows.length;
   };
-  const ownItems = (variant: "A" | "B") => items.filter((i) => i.variant === variant);
+  const ownItems = (variant: Variant) => items.filter((i) => i.variant === variant);
 
   console.log("\n=== 2. НАИВНЫЙ ВЗГЛЯД: ДОЛЯ ВЕРНЫХ ===============================");
   console.log(
@@ -690,8 +733,37 @@ async function report(ctx: {
   console.log(
     "пересчитываются, поэтому новые задания ложатся на уже существующую шкалу банка.",
   );
+  console.log("\n=== 6. УТЁКШИЙ ЯКОРЬ =============================================");
+  const leakedItem = items.find(
+    (i) => i.variant === "A" && i.task === LEAKED_ANCHOR_TASK,
+  ) as SeededItem;
   console.log(
-    `\nВ дашборде оба варианта посчитаны вместе — общие задания связывают их сами. Откройте банк\n` +
+    `Якорь ${itemCode(leakedItem.id, leakedItem.task)} когорта B решает так, будто знала ответ:`,
+  );
+  console.log(`он легче для неё на ${LEAK_SIZE.toFixed(1)} логита, хотя это то же самое задание.`);
+  console.log("");
+  console.log("Само по себе связывание этого не заметит: шкалы совместятся, и перекос размажется");
+  console.log("по всем восьми якорям. Диагностика дрейфа сравнивает каждый якорь с самим собой");
+  console.log("после совмещения — и уехавший виден отдельно от остальных.");
+  console.log("");
+  console.log("Смотрите на странице шкалы Раша, раздел «Дрейф общих заданий».");
+
+  console.log("\n=== 7. ВАРИАНТ БЕЗ ЯКОРЕЙ ========================================");
+  console.log(
+    `Вариант C заведён нарочно неправильно: ${ORPHAN_COHORT_SIZE} учеников, 43 своих задания,`,
+  );
+  console.log("ни одного общего с A и B и ни одного общего ученика.");
+  console.log("");
+  console.log("Матрица ответов распадается на два несвязных куска. JMLE на таких данных не падает");
+  console.log("и не предупреждает: он сойдётся и выдаст числа, но каждый кусок центрируется на");
+  console.log("своих заданиях, и разность трудностей между кусками — чистый артефакт.");
+  console.log("");
+  console.log("Платформа считает только крупнейший кусок. Задания варианта C не получают оценок");
+  console.log("вовсе — не приблизительных, а никаких, ровно как задание ниже порога ответов.");
+  console.log("На странице шкалы Раша он назван по имени: «Варианты вне общей шкалы».");
+
+  console.log(
+    `\nВ дашборде варианты A и B посчитаны вместе — общие задания связывают их сами. Откройте банк\n` +
       `демо-учителя: у каждого задания стоит трудность в логитах, SE и infit/outfit.`,
   );
 }

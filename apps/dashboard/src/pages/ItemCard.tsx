@@ -57,6 +57,8 @@ type Card = {
     difficulty: number | null;
     difficulty_se: number | null;
     thresholds: number[] | null;
+    displacement: number | null;
+    displacement_error: number | null;
     infit: number | null;
     outfit: number | null;
     fit_band: "overfit" | "productive" | "underfit" | "degrading" | null;
@@ -446,6 +448,23 @@ export function ItemCardPage() {
                       </p>
                     </div>
                   )}
+                  {/* Дрейф показывается только когда он есть: у задания из
+                      одного варианта сравнивать не с чем, и пустая строка
+                      «дрейфа нет» была бы шумом. */}
+                  {c.stats.displacement !== null &&
+                    c.stats.displacement_error !== null &&
+                    Math.abs(c.stats.displacement) >= 0.5 &&
+                    Math.abs(c.stats.displacement / c.stats.displacement_error) >= 2 && (
+                      <div className="mt-3 rounded-xl bg-warn-soft p-3">
+                        <p className="text-xs font-semibold text-warn">
+                          {t("cardDisplacement")}: {c.stats.displacement > 0 ? "+" : ""}
+                          {c.stats.displacement.toFixed(2)} ± {c.stats.displacement_error.toFixed(2)}
+                        </p>
+                        <p className="mt-1 text-xs leading-snug text-warn">
+                          {t("cardDisplacementHint")}
+                        </p>
+                      </div>
+                    )}
                   {c.stats.calibration_state === "provisional" && (
                     <p className="mt-2 text-xs text-muted">
                       {t("calibProvisional")} · {c.stats.calibration_responses}

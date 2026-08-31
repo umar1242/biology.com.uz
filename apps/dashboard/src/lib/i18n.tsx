@@ -155,6 +155,37 @@ const STRINGS = {
     uz: "Hech bir variantga kirmagan bank topshiriqlari",
   },
 
+  // --- дрейф якорей ---
+  raschDriftTitle: { ru: "Дрейф общих заданий", uz: "Umumiy topshiriqlar siljishi" },
+  raschDriftHint: {
+    ru: "Общее задание держит шкалу двух вариантов, пока остаётся тем же вопросом. Если оно утекло в чаты или тему стали проходить иначе, оно ведёт себя в новом варианте не так — и тянет за собой всю связь. Здесь показано расхождение задания с самим собой после совмещения шкал.",
+    uz: "Umumiy topshiriq bir xil savol bo'lib qolgunicha ikki variant shkalasini ushlab turadi. Agar u chatlarga oqib ketgan yoki mavzu boshqacha o'tila boshlagan bo'lsa, u yangi variantda boshqacha ishlaydi — va butun bog'lanishni tortadi.",
+  },
+  raschDriftNone: { ru: "Все общие задания ведут себя одинаково в своих вариантах.", uz: "Barcha umumiy topshiriqlar o'z variantlarida bir xil ishlaydi." },
+  raschDriftAction: {
+    ru: "Такое задание надо вывести из банка, а не подгонять под него шкалу: изменилось задание, а не измерение. Уже выставленные баллы не пересчитываются — как и при правке ключа.",
+    uz: "Bunday topshiriqni bankdan chiqarish kerak, shkalani unga moslashtirmaslik: o'zgargani — topshiriq, o'lchov emas. Qo'yilgan ballar qayta hisoblanmaydi.",
+  },
+  raschDriftValue: { ru: "разошлось на {value} логита", uz: "{value} logitga ajraldi" },
+  raschStableOf: { ru: "устойчивых {n} из {total}", uz: "{total} dan {n} barqaror" },
+  raschTooFewStable: {
+    ru: "устойчивых меньше {need} — связывать не на чем",
+    uz: "barqarorlari {need} dan kam — bog'lashga asos yo'q",
+  },
+  cardDisplacement: { ru: "Дрейф между вариантами", uz: "Variantlar orasidagi siljish" },
+  cardDisplacementHint: {
+    ru: "Задание стоит в нескольких вариантах и ведёт себя в них по-разному. Как якорь оно больше не годится.",
+    uz: "Topshiriq bir nechta variantda turibdi va ularda turlicha ishlaydi. Langar sifatida u endi yaramaydi.",
+  },
+
+  // --- связность матрицы ---
+  raschDisconnectedTitle: { ru: "Варианты вне общей шкалы", uz: "Umumiy shkaladan tashqaridagi variantlar" },
+  raschDisconnectedHint: {
+    ru: "У этих вариантов нет с остальными ни одного общего задания и ни одного ученика, писавшего оба. Их шкала — своя, и сравнивать их трудности с остальным банком нельзя. Поэтому платформа их не считает вовсе: чисел нет, а не «примерные». Добавьте якорные задания из банка — и следующий пересчёт свяжет их.",
+    uz: "Bu variantlarning boshqalar bilan birorta umumiy topshirig'i ham, ikkalasini yozgan o'quvchisi ham yo'q. Ularning shkalasi — o'ziniki, qiyinliklarini bank bilan solishtirib bo'lmaydi. Shuning uchun platforma ularni umuman hisoblamaydi. Bankdan langar topshiriqlar qo'shing — keyingi hisoblash ularni bog'laydi.",
+  },
+  raschDisconnectedItems: { ru: "заданий без оценки: {n}", uz: "bahosiz topshiriqlar: {n}" },
+
   // --- частично-кредитная модель и одномерность ---
   calibThresholds: { ru: "Ступени письменной работы", uz: "Yozma ish bosqichlari" },
   calibThresholdsDisordered: {

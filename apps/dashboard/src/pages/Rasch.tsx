@@ -49,14 +49,23 @@ type Overview = {
     title: string;
     items: number;
     calibrated: number;
-    partners: { exam_id: number; title: string; shared: number }[];
+    partners: { exam_id: number; title: string; shared: number; stable: number }[];
   }[];
+  drift: {
+    item_id: number;
+    code: string;
+    displacement: number;
+    standard_error: number;
+    z: number;
+  }[];
+  min_stable_anchors: number;
   score_tables: {
     exam_id: number;
     title: string;
     items: number;
     rows: { raw: number; logit: number }[];
   }[];
+  disconnected: { exam_id: number; title: string; items: number }[];
   reference_exam_id: number | null;
   dimensionality: {
     exam_id: number;
@@ -228,6 +237,7 @@ function MisfitList({ items, empty }: { items: OverviewItem[]; empty: string }) 
 
 export function RaschPage() {
   const { t, formatDateTime } = useI18n();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tableExam, setTableExam] = useState<number | null>(null);
 
@@ -301,6 +311,30 @@ export function RaschPage() {
           <p className="rounded-2xl border border-line bg-card p-5 text-sm text-muted">
             {t("raschEmpty", { min: data.thresholds.provisional })}
           </p>
+        )}
+
+        {/* Несвязность — не диагностика качества, а сообщение о том, что часть
+            банка вообще не измерена. Поэтому выше всех блоков и красным. */}
+        {data && data.disconnected.length > 0 && (
+          <section className="mb-4 rounded-2xl border border-neg bg-card p-5">
+            <p className="flex items-center gap-2 text-sm font-semibold text-neg">
+              <AlertTriangle size={15} /> {t("raschDisconnectedTitle")}
+            </p>
+            <div className="mt-2.5 flex flex-col gap-1.5">
+              {data.disconnected.map((d) => (
+                <div
+                  key={d.exam_id}
+                  className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-neg-soft px-3 py-2"
+                >
+                  <span className="text-sm font-medium text-ink">{d.title}</span>
+                  <span className="text-xs tabular-nums text-neg">
+                    {t("raschDisconnectedItems", { n: d.items })}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs leading-snug text-muted">{t("raschDisconnectedHint")}</p>
+          </section>
         )}
 
         {data?.run && data.map.items > 0 && (
@@ -436,6 +470,37 @@ export function RaschPage() {
               <MisfitList items={data.misfit.overfit} empty={t("raschMisfitNone")} />
             </Card>
 
+            <Card title={t("raschDriftTitle")} hint={t("raschDriftHint")}>
+              {data.drift.length === 0 ? (
+                <p className="text-xs text-muted">{t("raschDriftNone")}</p>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    {data.drift.map((d) => (
+                      <button
+                        key={d.item_id}
+                        type="button"
+                        onClick={() => navigate(`/bank/item/${d.item_id}`)}
+                        className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl bg-warn-soft px-3 py-2 text-left"
+                      >
+                        <span className="text-sm font-semibold tabular-nums text-ink">{d.code}</span>
+                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-warn">
+                          <span>
+                            {t("raschDriftValue", {
+                              value: `${d.displacement > 0 ? "+" : ""}${d.displacement.toFixed(2)}`,
+                            })}
+                          </span>
+                          <span className="text-muted">± {d.standard_error.toFixed(2)}</span>
+                          <span className="text-muted">z {d.z.toFixed(1)}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs leading-snug text-muted">{t("raschDriftAction")}</p>
+                </>
+              )}
+            </Card>
+
             <Card title={t("raschLinksTitle")} hint={t("raschLinksHint")}>
               <div className="flex flex-col gap-2">
                 {data.links.map((l) => {
@@ -457,6 +522,18 @@ export function RaschPage() {
                           {l.partners.map((p) => (
                             <p key={p.exam_id} className="text-xs text-muted">
                               {p.title} — {t("raschLinkShared", { n: p.shared })}
+                              {p.stable !== p.shared && (
+                                <span className="text-warn">
+                                  {" · "}
+                                  {t("raschStableOf", { n: p.stable, total: p.shared })}
+                                </span>
+                              )}
+                              {p.stable < data.min_stable_anchors && (
+                                <span className="text-neg">
+                                  {" · "}
+                                  {t("raschTooFewStable", { need: data.min_stable_anchors })}
+                                </span>
+                              )}
                             </p>
                           ))}
                           {best < RECOMMENDED_ANCHORS && (

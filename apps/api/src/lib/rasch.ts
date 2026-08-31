@@ -50,7 +50,9 @@ export type RaschPersonEstimate = {
 export type ExclusionReason =
   | "all_correct"
   | "all_wrong"
-  | "no_responses";
+  | "no_responses"
+  /** Задание не связано с основным массивом: его шкала — своя. */
+  | "disconnected";
 
 export type RaschResult = {
   items: RaschItemEstimate[];
@@ -59,6 +61,11 @@ export type RaschResult = {
   excludedPersons: { personId: number; reason: ExclusionReason }[];
   iterations: number;
   converged: boolean;
+  /**
+   * Сколько несвязных кусков нашлось в матрице. Больше одного — оценивался
+   * только крупнейший, остальные перечислены в excluded* как disconnected.
+   */
+  components: number;
 };
 
 export type CalibrateOptions = {
@@ -149,6 +156,61 @@ function removeExtremes(responses: RaschResponse[]): {
   }
 }
 
+/**
+ * Куски матрицы, между которыми нет ни одного общего ученика и ни одного
+ * общего задания.
+ *
+ * Зачем это считать. JMLE не падает и не предупреждает на несвязных данных:
+ * он сходится и выдаёт числа. Но каждый кусок центрируется на своих
+ * заданиях, то есть получает СВОЁ начало отсчёта, и разность трудностей
+ * между заданиями из разных кусков — чистый артефакт. Оценки внутри каждого
+ * куска при этом верны; неверно только сравнивать их между кусками.
+ *
+ * Пока вариант один, это спящая проблема. Она просыпается в тот день, когда
+ * появляется второй вариант, не разделивший с первым ни задания, ни ученика.
+ *
+ * Граф двудольный, «ученик — задание»: варианты связывает не только общее
+ * задание, но и ученик, писавший оба. Граф вариантов такую связь потерял бы.
+ */
+export function connectedComponents(
+  responses: RaschResponse[],
+): { items: number[]; persons: number[] }[] {
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    const p = parent.get(x) ?? x;
+    if (p === x) return x;
+    const root = find(p);
+    parent.set(x, root);
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+
+  for (const r of responses) {
+    const person = `p${r.personId}`;
+    const item = `i${r.itemId}`;
+    if (!parent.has(person)) parent.set(person, person);
+    if (!parent.has(item)) parent.set(item, item);
+    union(person, item);
+  }
+
+  const groups = new Map<string, { items: Set<number>; persons: Set<number> }>();
+  for (const r of responses) {
+    const root = find(`p${r.personId}`);
+    const group = groups.get(root) ?? { items: new Set<number>(), persons: new Set<number>() };
+    group.items.add(r.itemId);
+    group.persons.add(r.personId);
+    groups.set(root, group);
+  }
+
+  return [...groups.values()]
+    .map((g) => ({ items: [...g.items].sort((a, b) => a - b), persons: [...g.persons] }))
+    .sort((a, b) => b.items.length - a.items.length || a.items[0] - b.items[0]);
+}
+
 export function calibrate(
   responses: RaschResponse[],
   options: CalibrateOptions = {},
@@ -164,12 +226,32 @@ export function calibrate(
     excludedPersons: [],
     iterations: 0,
     converged: true,
+    components: 0,
   };
   if (responses.length === 0) return empty;
 
-  const { kept, excludedItems, excludedPersons } = removeExtremes(responses);
-  if (kept.length === 0) {
-    return { ...empty, excludedItems, excludedPersons };
+  const { kept: afterExtremes, excludedItems, excludedPersons } = removeExtremes(responses);
+  if (afterExtremes.length === 0) {
+    return { ...empty, excludedItems, excludedPersons, components: 0 };
+  }
+
+  // Связность считается ПОСЛЕ отсева крайних: выброшенное задание могло быть
+  // единственным мостом между вариантами, и до отсева матрица выглядела бы
+  // связной, не будучи ею на самом деле.
+  //
+  // Оценивается только крупнейший кусок. Остальные не получают чисел вовсе —
+  // не приблизительные, а никаких, ровно как задание ниже порога ответов.
+  // Так между кусками нечего перепутать: несопоставимых чисел просто нет.
+  const components = connectedComponents(afterExtremes);
+  const kept =
+    components.length > 1
+      ? afterExtremes.filter((r) => new Set(components[0].items).has(r.itemId))
+      : afterExtremes;
+  for (const component of components.slice(1)) {
+    for (const itemId of component.items) excludedItems.push({ itemId, reason: "disconnected" });
+    for (const personId of component.persons) {
+      excludedPersons.push({ personId, reason: "disconnected" });
+    }
   }
 
   const itemIds = [...new Set(kept.map((r) => r.itemId))].sort((a, b) => a - b);
@@ -314,7 +396,15 @@ export function calibrate(
     responses: personCount[p],
   }));
 
-  return { items, persons, excludedItems, excludedPersons, iterations, converged };
+  return {
+    items,
+    persons,
+    excludedItems,
+    excludedPersons,
+    iterations,
+    converged,
+    components: components.length,
+  };
 }
 
 function clampStep(step: number): number {

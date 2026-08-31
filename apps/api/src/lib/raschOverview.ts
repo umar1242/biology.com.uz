@@ -20,9 +20,11 @@ import { collectResponses } from "./calibration.js";
 import { scoreTable } from "./equating.js";
 import { analyseDimensionality, SECOND_DIMENSION_THRESHOLD } from "./dimensionality.js";
 import { loadEquatingContext } from "./equatingContext.js";
+import { DRIFT_MIN_LOGITS, DRIFT_MIN_Z, MIN_STABLE_ANCHORS } from "./anchorDrift.js";
 import {
   calibrate,
   calibrationState,
+  connectedComponents,
   fitBand,
   MIN_RESPONSES_PROVISIONAL,
   MIN_RESPONSES_STABLE,
@@ -91,14 +93,32 @@ export type RaschOverview = {
     title: string;
     items: number;
     calibrated: number;
-    partners: { exam_id: number; title: string; shared: number }[];
+    partners: { exam_id: number; title: string; shared: number; stable: number }[];
   }[];
+  /**
+   * Общие задания, разошедшиеся сами с собой между вариантами. Якорь держит
+   * шкалу, пока остаётся тем же вопросом; уехавший тянет за собой связь.
+   */
+  drift: {
+    item_id: number;
+    code: string;
+    displacement: number;
+    standard_error: number;
+    z: number;
+  }[];
+  min_stable_anchors: number;
   score_tables: {
     exam_id: number;
     title: string;
     items: number;
     rows: { raw: number; logit: number }[];
   }[];
+  /**
+   * Варианты, чьи задания не попали в основной кусок матрицы: с остальными их
+   * не связывает ни общее задание, ни общий ученик. Их трудности не считаются
+   * вовсе — не приблизительно, а никак.
+   */
+  disconnected: { exam_id: number; title: string; items: number }[];
   /** Вариант, к чьей шкале приводятся результаты остальных. */
   reference_exam_id: number | null;
   /**
@@ -181,7 +201,10 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
     separation: null,
     misfit: { underfit: [], overfit: [] },
     links: [],
+    drift: [],
+    min_stable_anchors: MIN_STABLE_ANCHORS,
     score_tables: [],
+    disconnected: [],
     reference_exam_id: null,
     dimensionality: [],
     dimension_threshold: SECOND_DIMENSION_THRESHOLD,
@@ -327,6 +350,26 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
   }
   const calibratedIds = new Set(shown.map((i) => i.id));
 
+  const driftRows = calibrations
+    .filter(
+      (c) =>
+        calibratedIds.has(c.itemId) &&
+        c.displacement !== null &&
+        c.displacementError !== null &&
+        c.displacementError > 0 &&
+        Math.abs(c.displacement) >= DRIFT_MIN_LOGITS &&
+        Math.abs(c.displacement / c.displacementError) >= DRIFT_MIN_Z,
+    )
+    .map((c) => ({
+      item_id: c.itemId,
+      code: itemCode(c.itemId, taskById.get(c.itemId) ?? 0),
+      displacement: Math.round((c.displacement as number) * 100) / 100,
+      standard_error: Math.round((c.displacementError as number) * 100) / 100,
+      z: Math.round(((c.displacement as number) / (c.displacementError as number)) * 10) / 10,
+    }))
+    .sort((a, b) => Math.abs(b.displacement) - Math.abs(a.displacement));
+  const driftedIds = new Set(driftRows.map((d) => d.item_id));
+
   const links = exams.map((e) => {
     const own = itemsByExam.get(e.id) ?? new Set<number>();
     return {
@@ -338,10 +381,12 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
         .filter((o) => o.id !== e.id)
         .map((o) => {
           const other = itemsByExam.get(o.id) ?? new Set<number>();
+          const shared = [...own].filter((id) => other.has(id));
           return {
             exam_id: o.id,
             title: o.title,
-            shared: [...own].filter((id) => other.has(id)).length,
+            shared: shared.length,
+            stable: shared.filter((id) => !driftedIds.has(id)).length,
           };
         })
         .filter((p) => p.shared > 0),
@@ -358,6 +403,29 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
       return { exam_id: e.id, title: e.title, items: own.length, rows: scoreTable(own) };
     })
     .filter((t) => t.items >= 5);
+
+  // --- несвязные куски --------------------------------------------------
+  // Крупнейший кусок откалиброван, остальные — нет. Сказать об этом надо
+  // громко и по именам вариантов: сообщение «часть заданий не откалибрована»
+  // без указания, каких именно, неотличимо от «данных не хватило».
+  const parts = connectedComponents(responses);
+  const primary = new Set(parts[0]?.items ?? []);
+  const disconnected: RaschOverview["disconnected"] = [];
+  if (parts.length > 1) {
+    const seen = new Set(responses.map((r) => r.itemId));
+    for (const exam of exams) {
+      const own = itemsByExam.get(exam.id);
+      if (!own || own.size === 0) continue;
+      const outside = [...own].filter((id) => !primary.has(id));
+      // Задание, которого нет в матрице вовсе (нет ни одного ответа), не
+      // «не связано» — оно просто ещё не решалось. Считаем только те, что
+      // в матрице есть, но лежат в другом куске.
+      const truly = outside.filter((id) => seen.has(id));
+      if (truly.length > 0) {
+        disconnected.push({ exam_id: exam.id, title: exam.title, items: truly.length });
+      }
+    }
+  }
 
   // --- одномерность по вариантам ---------------------------------------
   const abilityById = new Map(persons.map((p) => [p.personId, p.ability]));
@@ -425,7 +493,10 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
       overfit: shown.filter((i) => i.outfit < 0.5).sort((a, b) => a.outfit - b.outfit),
     },
     links,
+    drift: driftRows,
+    min_stable_anchors: MIN_STABLE_ANCHORS,
     score_tables,
+    disconnected,
     reference_exam_id: (await loadEquatingContext(teacherId)).referenceExamId,
     dimensionality,
     dimension_threshold: SECOND_DIMENSION_THRESHOLD,

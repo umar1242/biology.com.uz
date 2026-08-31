@@ -22,6 +22,7 @@ import {
   teachers,
 } from "../db/schema.js";
 import { calibrationState } from "./rasch.js";
+import { DRIFT_MIN_LOGITS, DRIFT_MIN_Z, MIN_STABLE_ANCHORS } from "./anchorDrift.js";
 
 export type ExamEquating = {
   examId: number;
@@ -29,6 +30,8 @@ export type ExamEquating = {
   linked: boolean;
   /** Сколько откалиброванных заданий у варианта общих непосредственно с эталоном. */
   sharedWithReference: number;
+  /** Из них устойчивых — не уехавших между вариантами. */
+  stableWithReference: number;
 };
 
 export type EquatingContext = {
@@ -60,9 +63,23 @@ export async function loadEquatingContext(teacherId: number): Promise<EquatingCo
   // Задания ниже порога ответов не участвуют: их трудность платформа не
   // показывает нигде, и опираться на неё в оценке ученика тем более нельзя.
   const difficultyByItem = new Map<number, number>();
+  // Уехавшее общее задание перестаёт быть якорем: оно ведёт себя в двух
+  // вариантах по-разному, и связь, на нём построенная, кривая. Из счёта
+  // связей такое задание выбывает, хотя трудность у него остаётся — она
+  // верна для каждого варианта в отдельности.
+  const drifted = new Set<number>();
   for (const c of calibrations) {
     if (calibrationState(c.responses) === "none") continue;
     difficultyByItem.set(c.itemId, c.difficulty);
+    if (
+      c.displacement !== null &&
+      c.displacementError !== null &&
+      Math.abs(c.displacement) >= DRIFT_MIN_LOGITS &&
+      c.displacementError > 0 &&
+      Math.abs(c.displacement / c.displacementError) >= DRIFT_MIN_Z
+    ) {
+      drifted.add(c.itemId);
+    }
   }
   if (difficultyByItem.size === 0) return EMPTY;
 
@@ -133,12 +150,19 @@ export async function loadEquatingContext(teacherId: number): Promise<EquatingCo
 
   const byExam = new Map<number, ExamEquating>();
   for (const [examId, items] of itemsByExam) {
+    const isReference = examId === referenceExamId;
+    const shared = isReference ? items : items.filter((id) => referenceSet.has(id));
+    const stable = shared.filter((id) => !drifted.has(id));
+    // Ниже порога устойчивых якорей связь есть формально, но держится на
+    // одном-двух заданиях: удаление ещё одного двинет шкалу сильнее, чем сам
+    // дрейф. Такую связь лучше не считать связью вовсе.
+    const enough = isReference || stable.length >= MIN_STABLE_ANCHORS;
     byExam.set(examId, {
       examId,
       difficulties: items.map((id) => difficultyByItem.get(id) as number),
-      linked: examId === referenceExamId || find(examId) === referenceRoot,
-      sharedWithReference:
-        examId === referenceExamId ? items.length : items.filter((id) => referenceSet.has(id)).length,
+      linked: (isReference || find(examId) === referenceRoot) && enough,
+      sharedWithReference: shared.length,
+      stableWithReference: stable.length,
     });
   }
 

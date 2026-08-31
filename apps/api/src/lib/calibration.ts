@@ -4,12 +4,15 @@ import {
   certCalibrationRuns,
   certExamAnswers,
   certExamAttempts,
+  certExamItems,
+  certExams,
   certItemCalibrations,
   certItems,
 } from "../db/schema.js";
 import { isClosedTask, maxPointsFor } from "./certExam.js";
 import { calibrate, calibrationState, type RaschResponse } from "./rasch.js";
 import { bandPoints, calibratePartialCredit, type PolytomousResponse } from "./pcm.js";
+import { compareAnchors, type AnchorMeasure } from "./anchorDrift.js";
 
 /**
  * Collects every graded answer belonging to one teacher into a single response
@@ -20,11 +23,14 @@ import { bandPoints, calibratePartialCredit, type PolytomousResponse } from "./p
  * legitimate here only because items keep their identity in the bank: the same
  * question asked in two variants is the same column.
  */
-export async function collectResponses(teacherId: number): Promise<RaschResponse[]> {
+export type SourcedResponse = RaschResponse & { examId: number };
+
+export async function collectResponses(teacherId: number): Promise<SourcedResponse[]> {
   const rows = await db
     .select({
       itemId: certExamAnswers.itemId,
       attemptId: certExamAnswers.attemptId,
+      examId: certExamAttempts.examId,
       taskNumber: certExamAnswers.taskNumber,
       isCorrect: certExamAnswers.isCorrect,
       awardedPoints: certExamAnswers.awardedPoints,
@@ -40,7 +46,7 @@ export async function collectResponses(teacherId: number): Promise<RaschResponse
       ),
     );
 
-  const responses: RaschResponse[] = [];
+  const responses: SourcedResponse[] = [];
   for (const r of rows) {
     if (r.itemId === null) continue;
     // Tasks 41–43 are scored 0–35, not right/wrong. A dichotomous Rasch model
@@ -55,7 +61,12 @@ export async function collectResponses(teacherId: number): Promise<RaschResponse
         : r.awardedPoints >= 1;
     if (solved === null) continue;
 
-    responses.push({ personId: r.attemptId, itemId: r.itemId, correct: solved });
+    responses.push({
+      personId: r.attemptId,
+      itemId: r.itemId,
+      correct: solved,
+      examId: r.examId,
+    });
   }
   return responses;
 }
@@ -99,6 +110,89 @@ async function collectPolytomous(teacherId: number): Promise<PolytomousResponse[
   return out;
 }
 
+/**
+ * Дрейф общих заданий: считается один раз за прогон, потому что требует
+ * отдельной калибровки каждого варианта, и в путь запроса такому не место.
+ *
+ * Каждый вариант калибруется по своим ответам, шкалы совмещаются по общим
+ * заданиям, остаток и есть дрейф. Для задания, стоящего в трёх вариантах,
+ * берётся наибольшее по модулю расхождение: якорь плох, если он разошёлся
+ * хоть с одним из партнёров.
+ */
+async function anchorDisplacement(
+  teacherId: number,
+  responses: SourcedResponse[],
+): Promise<Map<number, { drift: number; error: number }>> {
+  const out = new Map<number, { drift: number; error: number }>();
+
+  const examItems = await db
+    .select({ examId: certExamItems.examId, itemId: certExamItems.itemId })
+    .from(certExamItems)
+    .innerJoin(certExams, eq(certExams.id, certExamItems.examId))
+    .where(eq(certExams.teacherId, teacherId));
+
+  const itemsByExam = new Map<number, Set<number>>();
+  for (const r of examItems) {
+    const set = itemsByExam.get(r.examId) ?? new Set<number>();
+    set.add(r.itemId);
+    itemsByExam.set(r.examId, set);
+  }
+  const examIds = [...itemsByExam.keys()].sort((a, b) => a - b);
+  if (examIds.length < 2) return out;
+
+  // Отдельная калибровка каждого варианта — по ответам ЕГО когорты.
+  //
+  // Фильтровать по заданиям варианта нельзя: общее задание тогда попадёт в
+  // обе калибровки вместе с ответами обеих когорт, оценки станут почти
+  // одинаковыми, и расхождение, которое мы ищем, размажется само собой.
+  // Смысл сравнения именно в том, чтобы посмотреть на задание глазами двух
+  // РАЗНЫХ групп.
+  const soloByExam = new Map<number, Map<number, AnchorMeasure>>();
+  for (const examId of examIds) {
+    const rows = responses.filter((r) => r.examId === examId);
+    if (rows.length === 0) continue;
+    const solo = calibrate(rows);
+    soloByExam.set(
+      examId,
+      new Map(
+        solo.items.map((i) => [
+          i.itemId,
+          {
+            itemId: i.itemId,
+            difficulty: i.difficulty,
+            standardError: Number.isFinite(i.standardError) ? i.standardError : 99,
+          },
+        ]),
+      ),
+    );
+  }
+
+  for (let a = 0; a < examIds.length; a += 1) {
+    for (let b = a + 1; b < examIds.length; b += 1) {
+      const first = soloByExam.get(examIds[a]);
+      const second = soloByExam.get(examIds[b]);
+      if (!first || !second) continue;
+      const shared = [...first.keys()].filter((id) => second.has(id));
+      // Одно общее задание совмещает шкалы по себе самому и всегда даёт
+      // нулевой дрейф: сравнивать имеет смысл от двух.
+      if (shared.length < 2) continue;
+
+      const { drifts } = compareAnchors(
+        shared.map((id) => first.get(id) as AnchorMeasure),
+        shared.map((id) => second.get(id) as AnchorMeasure),
+      );
+      for (const d of drifts) {
+        const previous = out.get(d.itemId);
+        if (!previous || Math.abs(d.drift) > Math.abs(previous.drift)) {
+          out.set(d.itemId, { drift: d.drift, error: d.standardError });
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
 export type CalibrationRunSummary = {
   run_id: number | null;
   run_at: string | null;
@@ -110,6 +204,9 @@ export type CalibrationRunSummary = {
   responses: number;
   excluded_items: number;
   excluded_persons: number;
+  /** Кусков матрицы. Больше одного — считался только крупнейший. */
+  components: number;
+  excluded_disconnected: number;
 };
 
 /** Runs the calibration and stores it as a new snapshot. */
@@ -130,6 +227,8 @@ export async function runCalibration(teacherId: number): Promise<CalibrationRunS
       responses: responses.length,
       excluded_items: result.excludedItems.length,
       excluded_persons: result.excludedPersons.length,
+      components: result.components,
+      excluded_disconnected: result.excludedItems.filter((e) => e.reason === "disconnected").length,
     };
   }
 
@@ -144,6 +243,8 @@ export async function runCalibration(teacherId: number): Promise<CalibrationRunS
     })
     .returning();
 
+  const displacement = await anchorDisplacement(teacherId, responses);
+
   await db.insert(certItemCalibrations).values(
     result.items.map((i) => ({
       runId: run.id,
@@ -154,6 +255,8 @@ export async function runCalibration(teacherId: number): Promise<CalibrationRunS
       outfit: i.outfit,
       responses: i.responses,
       thresholds: null,
+      displacement: displacement.get(i.itemId)?.drift ?? null,
+      displacementError: displacement.get(i.itemId)?.error ?? null,
     })),
   );
 
@@ -177,6 +280,8 @@ export async function runCalibration(teacherId: number): Promise<CalibrationRunS
           outfit: i.outfit,
           responses: i.responses,
           thresholds: i.thresholds,
+          displacement: null,
+          displacementError: null,
         })),
       );
     }
@@ -192,6 +297,8 @@ export async function runCalibration(teacherId: number): Promise<CalibrationRunS
     responses: responses.length,
     excluded_items: result.excludedItems.length,
     excluded_persons: result.excludedPersons.length,
+    components: result.components,
+    excluded_disconnected: result.excludedItems.filter((e) => e.reason === "disconnected").length,
   };
 }
 
@@ -203,6 +310,9 @@ export type ItemCalibration = {
   responses: number;
   /** Только у заданий 41–43: ступени частично-кредитной модели. */
   thresholds: number[] | null;
+  /** Только у общих заданий: расхождение с самим собой между вариантами. */
+  displacement: number | null;
+  displacement_error: number | null;
 };
 
 /**
@@ -236,6 +346,8 @@ export async function latestCalibrationByItem(
       outfit: r.outfit,
       responses: r.responses,
       thresholds: r.thresholds,
+      displacement: r.displacement,
+      displacement_error: r.displacementError,
     });
   }
   return out;
@@ -281,5 +393,7 @@ export async function latestRun(teacherId: number): Promise<CalibrationRunSummar
     responses,
     excluded_items: 0,
     excluded_persons: 0,
+    components: 1,
+    excluded_disconnected: 0,
   };
 }

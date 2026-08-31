@@ -836,6 +836,11 @@ export const certItemCalibrations = pgTable(
     // Только у заданий с баллами (41–43): пороги перехода между ступенями по
     // частично-кредитной модели. difficulty у них — среднее этих порогов.
     thresholds: doublePrecision("thresholds").array(),
+    // Только у заданий, стоящих в двух и более вариантах: насколько задание
+    // разошлось само с собой между ними после совмещения шкал. Это и есть
+    // проверка того, что якорь ещё держит.
+    displacement: doublePrecision("displacement"),
+    displacementError: doublePrecision("displacement_error"),
   },
   (table) => [
     primaryKey({ columns: [table.runId, table.itemId] }),
