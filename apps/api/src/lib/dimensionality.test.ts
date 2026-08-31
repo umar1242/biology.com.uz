@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { analyseDimensionality } from "./dimensionality.js";
+import { analyseDimensionality, analyseLocalIndependence } from "./dimensionality.js";
 import { calibrate } from "./rasch.js";
 
 function mulberry32(seed: number) {
@@ -114,4 +114,61 @@ test("на коротком или малолюдном тесте отказы�
   assert.equal(contrastOf(responses), null);
   const short = makeData(303, 0).filter((r) => r.itemId <= 3);
   assert.equal(contrastOf(short), null);
+});
+
+// --- локальная независимость -------------------------------------------
+
+test("независимые задания не дают зависимых пар", () => {
+  const responses = makeData(505, 0);
+  const result = calibrate(responses);
+  const found = analyseLocalIndependence({
+    responses,
+    difficulties: new Map(result.items.map((i) => [i.itemId, i.difficulty])),
+    abilities: new Map(result.persons.map((p) => [p.personId, p.ability])),
+  });
+  assert.ok(found !== null);
+  assert.equal(found.pairs.length, 0, `нашлись пары: ${JSON.stringify(found.pairs)}`);
+});
+
+test("задания на общем тексте находятся парой", () => {
+  const rand = mulberry32(606);
+  const normal = (m: number, sd: number) => {
+    const u = Math.max(rand(), 1e-9);
+    return m + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand());
+  };
+
+  // Тридцать независимых заданий плюс тройка на общем тексте: понимание
+  // текста — своя способность, общая для тройки и не связанная с остальным.
+  const responses: { personId: number; itemId: number; correct: boolean }[] = [];
+  for (let p = 1; p <= 200; p += 1) {
+    const theta = normal(0, 1);
+    const reading = normal(0, 1.6);
+    for (let i = 1; i <= 30; i += 1) {
+      const b = -2 + (4 * (i - 1)) / 29;
+      // Задания 11, 12, 13 сидят на одном тексте: понял текст — решил все
+      // три, не понял — провалил все три, и подготовка тут ни при чём.
+      const shared = i >= 11 && i <= 13;
+      const ability = shared ? theta + reading : theta;
+      responses.push({ personId: p, itemId: i, correct: rand() < P(ability, b) });
+    }
+  }
+
+  const result = calibrate(responses);
+  const found = analyseLocalIndependence({
+    responses,
+    difficulties: new Map(result.items.map((i) => [i.itemId, i.difficulty])),
+    abilities: new Map(result.persons.map((p) => [p.personId, p.ability])),
+  });
+  assert.ok(found !== null);
+  assert.ok(found.pairs.length > 0, "зависимость не найдена");
+
+  // Все найденные пары должны быть внутри тройки, а не случайными.
+  const inside = found.pairs.filter(
+    (pair) => pair.first >= 11 && pair.first <= 13 && pair.second >= 11 && pair.second <= 13,
+  );
+  assert.equal(
+    inside.length,
+    found.pairs.length,
+    `нашлись посторонние пары: ${JSON.stringify(found.pairs)}`,
+  );
 });

@@ -218,6 +218,12 @@ const STRINGS = {
     ru: "Если задания на полюсах явно про разное — вариант меряет две вещи сразу, и общая шкала складывает несравнимое.",
     uz: "Agar qutblardagi topshiriqlar aniq turli narsa haqida bo'lsa — variant bir vaqtda ikki narsani o'lchaydi.",
   },
+  raschDependentTitle: { ru: "Зависимые пары заданий", uz: "Bog'liq topshiriq juftlari" },
+  raschDependentHint: {
+    ru: "Модель требует, чтобы после учёта подготовки ответы на разные задания были независимы. Задания на общем тексте это нарушают: кто понял текст — решит все, кто не понял — провалит все. Такая пара считается за два измерения, и тест выглядит надёжнее, чем он есть.",
+    uz: "Model tayyorgarlik hisobga olingandan keyin javoblar mustaqil bo'lishini talab qiladi. Umumiy matndagi topshiriqlar buni buzadi: matnni tushungan hammasini ishlaydi.",
+  },
+  raschDependentPair: { ru: "остатки ходят вместе: {value}", uz: "qoldiqlar birga yuradi: {value}" },
   raschDimensionNone: {
     ru: "Пока не на чем считать: нужен вариант, где не меньше 20 учеников ответили на 5 и более откалиброванных заданий.",
     uz: "Hozircha hisoblashga asos yo'q: kamida 20 o'quvchi 5 va undan ortiq kalibrlangan topshiriqqa javob bergan variant kerak.",

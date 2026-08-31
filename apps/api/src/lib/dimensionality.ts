@@ -78,17 +78,22 @@ function probability(ability: number, difficulty: number): number {
 
 type Cell = { personId: number; itemId: number; correct: boolean };
 
-function firstContrastOf(
+/**
+ * Матрица корреляций остатков. Раш-измерение из данных уже вычтено, поэтому
+ * то, что здесь коррелирует, модель не объяснила: либо второе измерение
+ * (тогда корреляции размазаны по группе заданий), либо зависимость пары
+ * (тогда это одна яркая клетка).
+ */
+function residualCorrelationMatrix(
   usable: Cell[],
   itemIds: number[],
   personIds: number[],
   difficulties: Map<number, number>,
   abilities: Map<number, number>,
-): { eigenvalue: number; vector: number[] } | null {
+): number[][] | null {
   const itemIndex = new Map(itemIds.map((id, i) => [id, i]));
   const personIndex = new Map(personIds.map((id, i) => [id, i]));
 
-  // Остатки: null там, где ученик задания не видел.
   const residual: (number | null)[][] = personIds.map(() => itemIds.map(() => null));
   for (const r of usable) {
     const p = probability(
@@ -101,7 +106,6 @@ function firstContrastOf(
       ((r.correct ? 1 : 0) - p) / Math.sqrt(variance);
   }
 
-  // Корреляции остатков по парам заданий, по общим ученикам.
   const n = itemIds.length;
   const corr: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
   for (let a = 0; a < n; a += 1) {
@@ -134,6 +138,154 @@ function firstContrastOf(
       corr[b][a] = c;
     }
   }
+  return corr;
+}
+
+/**
+ * Локальная независимость (Q₃ Йена): пары заданий, чьи остатки ходят вместе.
+ *
+ * Модель Раша требует, чтобы после учёта подготовки ответы на разные задания
+ * были независимы. Два задания на общем тексте это требование нарушают по
+ * построению: кто понял текст, решит оба, кто не понял — провалит оба, и
+ * подготовка тут ни при чём. Платформа это касается напрямую: по
+ * спецификации задания 33–35 сидят на одном тексте.
+ *
+ * Чем это вредно: зависимая пара считается за два независимых измерения, и
+ * тест выглядит надёжнее, чем он есть. Разделяющая способность завышается.
+ *
+ * Отсчёт ведётся от среднего по всем парам: у Q₃ есть известное смещение
+ * вниз, примерно −1/(L−1), потому что остатки связаны общей оценкой. Флаг
+ * ставится на превышение среднего, а не самого нуля.
+ *
+ * Порог — не константа. Пар в матрице сотни (у сорока заданий их 780), и при
+ * такой множественности самая большая корреляция даже на независимых данных
+ * заметно выше нуля просто по случайности. Поэтому потолок считается
+ * симуляцией: по оценённым параметрам порождаются заведомо независимые
+ * наборы, у каждого берётся НАИБОЛЬШЕЕ превышение, и планкой становится верх
+ * этого разброса. Ровно так же устроены потолок первого контраста и полоса
+ * соответствия — одна болезнь, одно лекарство.
+ */
+export type DependentPair = {
+  first: number;
+  second: number;
+  correlation: number;
+  /** Превышение над средней корреляцией по всем парам. */
+  excess: number;
+};
+
+/** Ниже этого превышение не считается содержательным, что бы ни сказала симуляция. */
+export const Q3_EXCESS_THRESHOLD = 0.2;
+
+const DEFAULT_Q3_SIMULATIONS = 24;
+
+export function analyseLocalIndependence(params: {
+  responses: Cell[];
+  difficulties: Map<number, number>;
+  abilities: Map<number, number>;
+  simulations?: number;
+}): { pairs: DependentPair[]; meanCorrelation: number; ceiling: number } | null {
+  const usable = params.responses.filter(
+    (r) => params.difficulties.has(r.itemId) && params.abilities.has(r.personId),
+  );
+  const itemIds = [...new Set(usable.map((r) => r.itemId))].sort((a, b) => a - b);
+  const personIds = [...new Set(usable.map((r) => r.personId))].sort((a, b) => a - b);
+  if (itemIds.length < MIN_ITEMS || personIds.length < MIN_PERSONS) return null;
+
+  const corr = residualCorrelationMatrix(
+    usable,
+    itemIds,
+    personIds,
+    params.difficulties,
+    params.abilities,
+  );
+  if (!corr) return null;
+
+  const values: number[] = [];
+  for (let a = 0; a < itemIds.length; a += 1) {
+    for (let b = a + 1; b < itemIds.length; b += 1) values.push(corr[a][b]);
+  }
+  const meanCorrelation = values.reduce((s, v) => s + v, 0) / values.length;
+
+  // Потолок: наибольшее превышение, какое даёт заведомо независимый набор
+  // такой же формы. Зерно выведено из формы задачи — ответ не должен меняться
+  // от пересчёта к пересчёту на одних и тех же данных.
+  const simulations = params.simulations ?? DEFAULT_Q3_SIMULATIONS;
+  const rand = mulberry32(itemIds.length * 7919 + personIds.length);
+  const maxima: number[] = [];
+  for (let s = 0; s < simulations; s += 1) {
+    const simulated = usable.map((r) => ({
+      personId: r.personId,
+      itemId: r.itemId,
+      correct:
+        rand() <
+        probability(
+          params.abilities.get(r.personId) as number,
+          params.difficulties.get(r.itemId) as number,
+        ),
+    }));
+    const m = residualCorrelationMatrix(
+      simulated,
+      itemIds,
+      personIds,
+      params.difficulties,
+      params.abilities,
+    );
+    if (!m) continue;
+    let sum = 0;
+    let count = 0;
+    let best = -Infinity;
+    for (let a = 0; a < itemIds.length; a += 1) {
+      for (let b = a + 1; b < itemIds.length; b += 1) {
+        sum += m[a][b];
+        count += 1;
+      }
+    }
+    const simulatedMean = sum / count;
+    for (let a = 0; a < itemIds.length; a += 1) {
+      for (let b = a + 1; b < itemIds.length; b += 1) {
+        best = Math.max(best, m[a][b] - simulatedMean);
+      }
+    }
+    maxima.push(best);
+  }
+  maxima.sort((a, b) => a - b);
+  const simulated = maxima.length
+    ? maxima[Math.min(maxima.length - 1, Math.floor(maxima.length * 0.95))]
+    : Q3_EXCESS_THRESHOLD;
+  const ceiling = Math.max(simulated, Q3_EXCESS_THRESHOLD);
+
+  const pairs: DependentPair[] = [];
+  for (let a = 0; a < itemIds.length; a += 1) {
+    for (let b = a + 1; b < itemIds.length; b += 1) {
+      const excess = corr[a][b] - meanCorrelation;
+      if (excess > ceiling) {
+        pairs.push({
+          first: itemIds[a],
+          second: itemIds[b],
+          correlation: Math.round(corr[a][b] * 1000) / 1000,
+          excess: Math.round(excess * 1000) / 1000,
+        });
+      }
+    }
+  }
+
+  return {
+    pairs: pairs.sort((x, y) => y.excess - x.excess),
+    meanCorrelation: Math.round(meanCorrelation * 1000) / 1000,
+    ceiling: Math.round(ceiling * 1000) / 1000,
+  };
+}
+
+function firstContrastOf(
+  usable: Cell[],
+  itemIds: number[],
+  personIds: number[],
+  difficulties: Map<number, number>,
+  abilities: Map<number, number>,
+): { eigenvalue: number; vector: number[] } | null {
+  const corr = residualCorrelationMatrix(usable, itemIds, personIds, difficulties, abilities);
+  if (!corr) return null;
+  const n = itemIds.length;
 
   // Наибольшее собственное значение и вектор — степенным методом. Матрица
   // симметрична, поэтому итерации сходятся к первой компоненте.

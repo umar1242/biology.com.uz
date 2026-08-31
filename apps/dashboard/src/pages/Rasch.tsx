@@ -79,6 +79,7 @@ type Overview = {
     suspect: boolean;
     top: { code: string; loading: number }[];
     bottom: { code: string; loading: number }[];
+    dependent: { first: string; second: string; correlation: number; excess: number }[];
   }[];
   dimension_threshold: number;
   history: { run_id: number; run_at: string; persons: number; items: number }[];
@@ -447,6 +448,28 @@ export function RaschPage() {
                           {d.suspect ? t("raschDimensionSuspect") : t("raschDimensionOk")}
                         </span>
                       </div>
+
+                      {d.dependent.length > 0 && (
+                        <div className="mt-2.5 rounded-lg bg-warn-soft p-2.5">
+                          <p className="text-xs font-medium text-warn">
+                            {t("raschDependentTitle")}
+                          </p>
+                          <div className="mt-1 flex flex-col gap-0.5">
+                            {d.dependent.map((p) => (
+                              <p
+                                key={`${p.first}-${p.second}`}
+                                className="text-xs tabular-nums text-warn"
+                              >
+                                {p.first} ↔ {p.second} ·{" "}
+                                {t("raschDependentPair", { value: p.correlation.toFixed(2) })}
+                              </p>
+                            ))}
+                          </div>
+                          <p className="mt-1.5 text-xs leading-snug text-muted">
+                            {t("raschDependentHint")}
+                          </p>
+                        </div>
+                      )}
 
                       {d.suspect && (
                         <div className="mt-2.5 flex flex-col gap-1.5">

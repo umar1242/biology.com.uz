@@ -400,6 +400,11 @@ async function seed(): Promise<void> {
       const ability = normal(abilityShift, 1.05);
       abilities.push({ variant, ability });
 
+      // Задания 33–35 по спецификации сидят на общем тексте: понял текст —
+      // решил все три, не понял — провалил все три, и подготовка тут ни при
+      // чём. Эта прибавка и создаёт зависимость, которую должен найти Q₃.
+      const reading = normal(0, 1.6);
+
       const answers: (typeof certExamAnswers.$inferInsert)[] = [];
       let auto = 0;
       let manual = 0;
@@ -432,7 +437,10 @@ async function seed(): Promise<void> {
         }
 
         const leaked = variant === "B" && item.task === LEAKED_ANCHOR_TASK;
-        const knows = rand() < probability(ability, item.trueDifficulty - (leaked ? LEAK_SIZE : 0));
+        const sharedText = task >= 33 && task <= 35 ? reading : 0;
+        const knows =
+          rand() <
+          probability(ability + sharedText, item.trueDifficulty - (leaked ? LEAK_SIZE : 0));
         // Вариант C в разборы якорей не идёт: он существует ради проверки
         // связности, и подмешивать его в сравнение A с B нельзя.
         const matrix = variant === "A" ? matrixA : variant === "B" ? matrixB : null;

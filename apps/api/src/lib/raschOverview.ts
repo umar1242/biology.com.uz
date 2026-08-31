@@ -18,7 +18,11 @@ import {
 import { itemCode } from "./certExam.js";
 import { collectResponses } from "./calibration.js";
 import { scoreTable } from "./equating.js";
-import { analyseDimensionality, SECOND_DIMENSION_THRESHOLD } from "./dimensionality.js";
+import {
+  analyseDimensionality,
+  analyseLocalIndependence,
+  SECOND_DIMENSION_THRESHOLD,
+} from "./dimensionality.js";
 import { loadEquatingContext } from "./equatingContext.js";
 import { DRIFT_MIN_LOGITS, DRIFT_MIN_Z, MIN_STABLE_ANCHORS } from "./anchorDrift.js";
 import { fitVerdict } from "./fitEnvelope.js";
@@ -139,6 +143,12 @@ export type RaschOverview = {
     suspect: boolean;
     top: { code: string; loading: number }[];
     bottom: { code: string; loading: number }[];
+    /**
+     * Пары заданий, чьи остатки ходят вместе: модель требует, чтобы после
+     * учёта подготовки ответы были независимы, а задания на общем тексте это
+     * нарушают по построению.
+     */
+    dependent: { first: string; second: string; correlation: number; excess: number }[];
   }[];
   dimension_threshold: number;
   history: { run_id: number; run_at: string; persons: number; items: number }[];
@@ -480,6 +490,12 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
       code: codeByItem.get(l.itemId) ?? String(l.itemId),
       loading: l.loading,
     }));
+    const independence = analyseLocalIndependence({
+      responses: rows,
+      difficulties: difficultyByItem,
+      abilities: abilityById,
+    });
+
     dimensionality.push({
       exam_id: exam.id,
       title: exam.title,
@@ -490,6 +506,12 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
       suspect: analysis.suspect,
       top: named.slice(0, 5),
       bottom: named.slice(-5).reverse(),
+      dependent: (independence?.pairs ?? []).slice(0, 6).map((p) => ({
+        first: codeByItem.get(p.first) ?? String(p.first),
+        second: codeByItem.get(p.second) ?? String(p.second),
+        correlation: p.correlation,
+        excess: p.excess,
+      })),
     });
   }
 
