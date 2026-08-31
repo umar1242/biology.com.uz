@@ -93,80 +93,105 @@ function Card({
 }
 
 /**
- * Карта Райта: одна шкала логитов, ученики слева, задания справа.
+ * Карта Райта в книжном виде: горизонтальная ось логитов, ученики
+ * гистограммой вверх, задания — вниз от той же оси.
  *
- * Две гистограммы вокруг общей оси, а не два отдельных графика: смысл карты
- * в том, что находится НАПРОТИВ друг друга, и раздельные оси этот смысл
- * теряют. Ось идёт сверху вниз от трудного к лёгкому — так её печатают в
- * учебниках, и так же читается «выше = сильнее».
+ * Так её печатают в работах по раш-измерению, и не из привычки: обе величины
+ * живут на ОДНОЙ шкале, и общая ось — единственный способ это показать. Смысл
+ * карты в том, что стоит друг против друга по вертикали; развернув её боком,
+ * мы это соседство теряли.
+ *
+ * Половины масштабируются независимо, и пик каждой подписан числом: учеников
+ * и заданий может быть на порядок разное количество, и общий масштаб просто
+ * расплющил бы меньшую половину в полоску.
  */
 function WrightMap({ map, axis }: { map: Overview["map"]; axis: Overview["axis"] }) {
   const { t } = useI18n();
-  const rows = useMemo(() => [...map.rows].sort((a, b) => b.from - a.from), [map.rows]);
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.persons, r.items)));
-  const shareAt = useMemo(
-    () => new Map(axis.map((a) => [a.logit, a.share])),
-    [axis],
-  );
+  const rows = useMemo(() => [...map.rows].sort((a, b) => a.from - b.from), [map.rows]);
+  const shareAt = useMemo(() => new Map(axis.map((a) => [a.logit, a.share])), [axis]);
+
+  const maxPersons = Math.max(1, ...rows.map((r) => r.persons));
+  const maxItems = Math.max(1, ...rows.map((r) => r.items));
+
+  const from = rows.length ? rows[0].from : 0;
+  const to = rows.length ? rows[rows.length - 1].from + map.bin : 1;
+  const span = to - from || 1;
+  const positionOf = (logit: number) => ((logit - from) / span) * 100;
 
   return (
     <div>
-      <div className="mb-2 flex items-end justify-between text-[11px] text-muted">
+      <div className="mb-1 flex items-baseline justify-between text-[11px] text-muted">
         <span>
           {t("raschMapPersons")} · {map.persons}
           {map.person_mean !== null &&
             ` · ${t("raschMeanLine", { value: map.person_mean.toFixed(2) })}`}
         </span>
-        <span className="text-right">
+        <span>{t("raschPeak", { n: maxPersons })}</span>
+      </div>
+
+      <div className="relative">
+        {/* Средние — вертикальные метки поверх обеих половин: расстояние между
+            ними и есть попадание банка в тех, кто по нему учится. */}
+        {map.person_mean !== null && (
+          <div
+            className="pointer-events-none absolute top-0 bottom-0 z-10 w-px bg-accent/50"
+            style={{ left: `${positionOf(map.person_mean)}%` }}
+          />
+        )}
+        {map.item_mean !== null && (
+          <div
+            className="pointer-events-none absolute top-0 bottom-0 z-10 w-px bg-ink/40"
+            style={{ left: `${positionOf(map.item_mean)}%` }}
+          />
+        )}
+
+        <div className="flex items-stretch gap-px">
+          {rows.map((r) => {
+            const whole = Math.abs(r.from - Math.round(r.from)) < 1e-9;
+            return (
+              <div key={r.from} className="relative flex flex-1 flex-col">
+                <div className="flex h-24 items-end" title={`${r.persons}`}>
+                  <div
+                    className="w-full rounded-t-sm bg-accent"
+                    style={{ height: `${(r.persons / maxPersons) * 100}%` }}
+                  />
+                </div>
+
+                <div className={`h-px ${whole ? "bg-muted" : "bg-line"}`} />
+
+                <div className="flex h-24 items-start" title={`${r.items}`}>
+                  <div
+                    className="w-full rounded-b-sm bg-ink"
+                    style={{ height: `${(r.items / maxItems) * 100}%` }}
+                  />
+                </div>
+
+                {/* Подпись шире колонки, поэтому центрируется поверх соседей:
+                    целые логиты идут через четыре столбца, налезать не на что. */}
+                {whole && (
+                  <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-center whitespace-nowrap">
+                    <div className="text-[11px] font-semibold tabular-nums text-ink">
+                      {r.from > 0 ? "+" : ""}
+                      {r.from.toFixed(0)}
+                    </div>
+                    <div className="text-[10px] tabular-nums text-muted">
+                      {Math.round((shareAt.get(Math.round(r.from)) ?? 0) * 100)}%
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-9 flex items-baseline justify-between text-[11px] text-muted">
+        <span>
           {t("raschMapItems")} · {map.items}
           {map.item_mean !== null &&
             ` · ${t("raschMeanLine", { value: map.item_mean.toFixed(2) })}`}
         </span>
-      </div>
-
-      <div className="flex flex-col gap-px">
-        {rows.map((r) => {
-          // Целые логиты получают подпись и более заметную линию — иначе
-          // шкала из 40 строк по 0.25 читается как полосатый ковёр.
-          const whole = Math.abs(r.from - Math.round(r.from)) < 1e-9;
-          return (
-            <div key={r.from} className="flex items-center gap-2">
-              <div className="flex h-3.5 flex-1 items-center justify-end">
-                {r.persons > 0 && (
-                  <div
-                    className="h-2.5 rounded-l-sm bg-accent"
-                    style={{ width: `${(r.persons / max) * 100}%` }}
-                    title={`${r.persons}`}
-                  />
-                )}
-              </div>
-              {/* Логит — честная величина, процент под ним — перевод на язык
-                  учителя. Второй строкой и тише: он для чтения, а не для
-                  арифметики. */}
-              <span className="flex w-16 shrink-0 items-baseline justify-center gap-1">
-                {whole && (
-                  <>
-                    <span className="text-[10px] font-semibold tabular-nums text-ink">
-                      {r.from.toFixed(0)}
-                    </span>
-                    <span className="text-[9px] tabular-nums text-muted">
-                      {Math.round((shareAt.get(Math.round(r.from)) ?? 0) * 100)}%
-                    </span>
-                  </>
-                )}
-              </span>
-              <div className="flex h-3.5 flex-1 items-center">
-                {r.items > 0 && (
-                  <div
-                    className="h-2.5 rounded-r-sm bg-ink"
-                    style={{ width: `${(r.items / max) * 100}%` }}
-                    title={`${r.items}`}
-                  />
-                )}
-              </div>
-            </div>
-          );
-        })}
+        <span>{t("raschPeak", { n: maxItems })}</span>
       </div>
     </div>
   );
@@ -183,10 +208,10 @@ function MisfitList({ items, empty }: { items: OverviewItem[]; empty: string }) 
           key={i.id}
           type="button"
           onClick={() => navigate(`/bank/item/${i.id}`)}
-          className="flex items-center justify-between gap-3 rounded-xl bg-inset px-3 py-2 text-left hover:bg-warn-soft"
+          className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl bg-inset px-3 py-2 text-left hover:bg-warn-soft"
         >
           <span className="text-sm font-semibold tabular-nums text-ink">{i.code}</span>
-          <span className="flex items-center gap-3 text-xs tabular-nums text-muted">
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-muted">
             <span>b {i.difficulty.toFixed(2)}</span>
             {i.solved_share !== null && (
               <span>{t("raschSolvedShare", { n: Math.round(i.solved_share * 100) })}</span>
@@ -315,24 +340,24 @@ export function RaschPage() {
                   return (
                     <div
                       key={b.from}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-1.5 text-xs ${
+                      className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-1.5 text-xs ${
                         gap ? "bg-warn-soft" : "bg-inset"
                       }`}
                     >
-                      <span className="w-24 shrink-0 tabular-nums text-muted">
+                      <span className="w-20 shrink-0 tabular-nums text-muted">
                         {b.from.toFixed(1)} … {(b.from + 0.5).toFixed(1)}
                       </span>
-                      <span className="w-24 shrink-0 tabular-nums text-ink">
+                      <span className="tabular-nums text-ink">
                         {t("raschMapPersons")}: {b.persons}
                       </span>
-                      <span className="w-24 shrink-0 tabular-nums text-ink">
+                      <span className="tabular-nums text-ink">
                         {t("raschMapItems")}: {b.items}
                       </span>
-                      <span className="w-28 shrink-0 tabular-nums text-muted">
+                      <span className="tabular-nums text-muted">
                         {t("raschSolvedShare", { n: Math.round(b.share * 100) })}
                       </span>
                       {gap && (
-                        <span className="flex items-center gap-1 font-medium text-warn">
+                        <span className="flex items-center gap-1 whitespace-nowrap font-medium text-warn">
                           <AlertTriangle size={12} /> {t("raschBandGap")}
                         </span>
                       )}

@@ -242,8 +242,8 @@ const STRINGS = {
   },
   raschMapTitle: { ru: "Карта: ученики и задания на одной шкале", uz: "Xarita: o'quvchilar va topshiriqlar bir shkalada" },
   raschMapHint: {
-    ru: "Слева — сколько учеников с такой подготовкой, справа — сколько заданий такой трудности. Задание работает там, где напротив него стоят ученики.",
-    uz: "Chapda — shunday tayyorgarlikdagi o'quvchilar soni, o'ngda — shunday qiyinlikdagi topshiriqlar soni. Topshiriq ro'parasida o'quvchilar turgan joyda ishlaydi.",
+    ru: "Вверх — сколько учеников с такой подготовкой, вниз — сколько заданий такой трудности. Задание работает там, где над ним стоят ученики. Половины масштабированы отдельно, пик каждой подписан.",
+    uz: "Yuqoriga — shunday tayyorgarlikdagi o'quvchilar soni, pastga — shunday qiyinlikdagi topshiriqlar soni. Topshiriq ustida o'quvchilar turgan joyda ishlaydi. Yarimlar alohida masshtablangan, har birining cho'qqisi imzolangan.",
   },
   raschAxisHint: {
     ru: "Процент под логитом — какую долю банка решает ученик такого уровня. Это подпись для чтения: складывать и усреднять проценты нельзя, шкала неравномерна.",
@@ -253,6 +253,7 @@ const STRINGS = {
   raschMapPersons: { ru: "Ученики", uz: "O'quvchilar" },
   raschMapItems: { ru: "Задания", uz: "Topshiriqlar" },
   raschMeanLine: { ru: "среднее {value}", uz: "o'rtacha {value}" },
+  raschPeak: { ru: "пик {n}", uz: "cho'qqi {n}" },
   raschBandsTitle: { ru: "Покрытие: где банку не хватает заданий", uz: "Qamrov: bankka topshiriq yetishmaydigan joylar" },
   raschBandsHint: {
     ru: "Полосы по полулогита в том диапазоне, где стоят ученики.",
