@@ -18,6 +18,8 @@ type OverviewItem = {
   infit: number;
   outfit: number;
   fit_band: "overfit" | "productive" | "underfit" | "degrading";
+  outfit_low: number | null;
+  outfit_high: number | null;
   responses: number;
   state: "none" | "provisional" | "stable";
   solved_share: number | null;
@@ -227,6 +229,14 @@ function MisfitList({ items, empty }: { items: OverviewItem[]; empty: string }) 
             )}
             <span>infit {i.infit.toFixed(2)}</span>
             <span className="font-semibold text-ink">outfit {i.outfit.toFixed(2)}</span>
+            {i.outfit_low !== null && i.outfit_high !== null && (
+              <span>
+                {t("fitEnvelope", {
+                  low: i.outfit_low.toFixed(2),
+                  high: i.outfit_high.toFixed(2),
+                })}
+              </span>
+            )}
             <span>{i.responses}</span>
           </span>
         </button>
@@ -464,6 +474,8 @@ export function RaschPage() {
               <p className="mb-1.5 text-xs font-medium text-ink">{t("raschUnderfit")}</p>
               <p className="mb-2.5 text-xs text-muted">{t("raschUnderfitHint")}</p>
               <MisfitList items={data.misfit.underfit} empty={t("raschMisfitNone")} />
+
+              <p className="mt-3 text-xs leading-snug text-muted">{t("fitEnvelopeHint")}</p>
 
               <p className="mt-5 mb-1.5 text-xs font-medium text-ink">{t("raschOverfit")}</p>
               <p className="mb-2.5 text-xs text-muted">{t("raschOverfitHint")}</p>

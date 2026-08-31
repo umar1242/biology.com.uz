@@ -21,7 +21,8 @@ import {
   responseCountByItem,
   runCalibration,
 } from "../lib/calibration.js";
-import { calibrationState, fitBand, MIN_RESPONSES_PROVISIONAL } from "../lib/rasch.js";
+import { calibrationState, MIN_RESPONSES_PROVISIONAL } from "../lib/rasch.js";
+import { fitVerdict } from "../lib/fitEnvelope.js";
 import { buildOverview } from "../lib/raschOverview.js";
 import { equateScore, type EquatedResult } from "../lib/equating.js";
 import { loadEquatingContext, type EquatingContext } from "../lib/equatingContext.js";
@@ -273,6 +274,31 @@ async function describeExam(exam: typeof certExams.$inferSelect) {
     total_max_points: TOTAL_MAX_POINTS,
     created_at: exam.createdAt,
   };
+}
+
+/**
+ * Вердикт по соответствию: полоса, измеренная на этой матрице, если она есть,
+ * и книжные границы, если прогон старше этой возможности.
+ *
+ * Отдельной ступенью остаётся «разрушительно» — выше двойки задание не просто
+ * выбивается из полосы, оно вносит в измерение больше шума, чем смысла, и это
+ * стоит показывать иначе, чем пограничный случай.
+ */
+function bandOf(
+  calibration: {
+    outfit: number;
+    outfit_low: number | null;
+    outfit_high: number | null;
+  } | null,
+): "overfit" | "productive" | "underfit" | "degrading" | null {
+  if (!calibration) return null;
+  const envelope =
+    calibration.outfit_low !== null && calibration.outfit_high !== null
+      ? { outfitLow: calibration.outfit_low, outfitHigh: calibration.outfit_high }
+      : null;
+  const verdict = fitVerdict(calibration.outfit, envelope);
+  if (verdict === "underfit" && calibration.outfit > 2) return "degrading";
+  return verdict;
 }
 
 const certExamRoutes: FastifyPluginAsync = async (app) => {
@@ -571,7 +597,9 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         difficulty_se: cal?.standard_error ?? null,
         infit: cal?.infit ?? null,
         outfit: cal?.outfit ?? null,
-        fit_band: cal ? fitBand(cal.outfit) : null,
+        fit_band: bandOf(cal),
+        outfit_low: cal?.outfit_low ?? null,
+        outfit_high: cal?.outfit_high ?? null,
         calibration_state: calibrationState(calResponses),
         calibration_responses: calResponses,
         calibration_responses_needed: MIN_RESPONSES_PROVISIONAL,
@@ -781,7 +809,9 @@ const certExamRoutes: FastifyPluginAsync = async (app) => {
         displacement_error: calibration?.displacement_error ?? null,
         infit: calibration?.infit ?? null,
         outfit: calibration?.outfit ?? null,
-        fit_band: calibration ? fitBand(calibration.outfit) : null,
+        outfit_low: calibration?.outfit_low ?? null,
+        outfit_high: calibration?.outfit_high ?? null,
+        fit_band: bandOf(calibration ?? null),
         calibration_state: calibrationState(calibrationResponses),
         calibration_responses: calibrationResponses,
         calibration_responses_needed: MIN_RESPONSES_PROVISIONAL,

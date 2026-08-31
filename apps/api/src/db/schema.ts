@@ -841,6 +841,12 @@ export const certItemCalibrations = pgTable(
     // проверка того, что якорь ещё держит.
     displacement: doublePrecision("displacement"),
     displacementError: doublePrecision("displacement_error"),
+    // Полоса соответствия, измеренная симуляцией на этой матрице. NULL —
+    // прогон старше этой возможности, вердикт берётся по книжным границам.
+    outfitLow: doublePrecision("outfit_low"),
+    outfitHigh: doublePrecision("outfit_high"),
+    infitLow: doublePrecision("infit_low"),
+    infitHigh: doublePrecision("infit_high"),
   },
   (table) => [
     primaryKey({ columns: [table.runId, table.itemId] }),

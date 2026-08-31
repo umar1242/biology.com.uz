@@ -21,11 +21,11 @@ import { scoreTable } from "./equating.js";
 import { analyseDimensionality, SECOND_DIMENSION_THRESHOLD } from "./dimensionality.js";
 import { loadEquatingContext } from "./equatingContext.js";
 import { DRIFT_MIN_LOGITS, DRIFT_MIN_Z, MIN_STABLE_ANCHORS } from "./anchorDrift.js";
+import { fitVerdict } from "./fitEnvelope.js";
 import {
   calibrate,
   calibrationState,
   connectedComponents,
-  fitBand,
   MIN_RESPONSES_PROVISIONAL,
   MIN_RESPONSES_STABLE,
   type CalibrationState,
@@ -55,6 +55,9 @@ export type OverviewItem = {
   infit: number;
   outfit: number;
   fit_band: FitBand;
+  /** Полоса, в которой держится исправное задание при таком объёме данных. */
+  outfit_low: number | null;
+  outfit_high: number | null;
   responses: number;
   state: CalibrationState;
   /**
@@ -142,6 +145,26 @@ export type RaschOverview = {
 };
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+
+/** Вердикт по полосе, с отдельной ступенью «разрушительно» выше двойки. */
+function bandOf(
+  outfit: number,
+  envelope: { outfitLow: number; outfitHigh: number } | null,
+): FitBand {
+  const verdict = fitVerdict(outfit, envelope);
+  if (verdict === "underfit" && outfit > 2) return "degrading";
+  return verdict;
+}
+
+/** Полоса задания, если она посчитана; иначе null — вердикт по книжным границам. */
+function envelopeOf(row: {
+  outfitLow: number | null;
+  outfitHigh: number | null;
+}): { outfitLow: number; outfitHigh: number } | null {
+  return row.outfitLow !== null && row.outfitHigh !== null
+    ? { outfitLow: row.outfitLow, outfitHigh: row.outfitHigh }
+    : null;
+}
 
 function histogram(values: number[], bin: number): Map<number, number> {
   const out = new Map<number, number>();
@@ -245,7 +268,9 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
       standard_error: c.standardError,
       infit: c.infit,
       outfit: c.outfit,
-      fit_band: fitBand(c.outfit),
+      fit_band: bandOf(c.outfit, envelopeOf(c)),
+      outfit_low: c.outfitLow,
+      outfit_high: c.outfitHigh,
       responses: c.responses,
       state: calibrationState(c.responses),
       solved_share: null,
@@ -488,9 +513,13 @@ export async function buildOverview(teacherId: number): Promise<RaschOverview> {
             persons.map((p) => p.standardError),
           )
         : null,
+    // Списки собираются по вердикту, а не по постоянному порогу: иначе
+    // задание попадало бы в список «вне полосы» с пометкой «в полосе».
     misfit: {
-      underfit: shown.filter((i) => i.outfit > 1.5).sort((a, b) => b.outfit - a.outfit),
-      overfit: shown.filter((i) => i.outfit < 0.5).sort((a, b) => a.outfit - b.outfit),
+      underfit: shown
+        .filter((i) => i.fit_band === "underfit" || i.fit_band === "degrading")
+        .sort((a, b) => b.outfit - a.outfit),
+      overfit: shown.filter((i) => i.fit_band === "overfit").sort((a, b) => a.outfit - b.outfit),
     },
     links,
     drift: driftRows,

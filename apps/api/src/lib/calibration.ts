@@ -13,6 +13,7 @@ import { isClosedTask, maxPointsFor } from "./certExam.js";
 import { calibrate, calibrationState, type RaschResponse } from "./rasch.js";
 import { bandPoints, calibratePartialCredit, type PolytomousResponse } from "./pcm.js";
 import { compareAnchors, type AnchorMeasure } from "./anchorDrift.js";
+import { simulateFitEnvelopes } from "./fitEnvelope.js";
 
 /**
  * Collects every graded answer belonging to one teacher into a single response
@@ -245,6 +246,15 @@ export async function runCalibration(teacherId: number): Promise<CalibrationRunS
 
   const displacement = await anchorDisplacement(teacherId, responses);
 
+  // Полосы соответствия — симуляцией по этой же матрице. Считаются здесь, а
+  // не в путь запроса: пятьдесят прогонов по всем ячейкам это миллисекунды,
+  // но делать их на каждый показ карточки незачем.
+  const envelopes = simulateFitEnvelopes({
+    responses,
+    difficulties: new Map(result.items.map((i) => [i.itemId, i.difficulty])),
+    abilities: new Map(result.persons.map((p) => [p.personId, p.ability])),
+  });
+
   await db.insert(certItemCalibrations).values(
     result.items.map((i) => ({
       runId: run.id,
@@ -257,6 +267,10 @@ export async function runCalibration(teacherId: number): Promise<CalibrationRunS
       thresholds: null,
       displacement: displacement.get(i.itemId)?.drift ?? null,
       displacementError: displacement.get(i.itemId)?.error ?? null,
+      outfitLow: envelopes.get(i.itemId)?.outfitLow ?? null,
+      outfitHigh: envelopes.get(i.itemId)?.outfitHigh ?? null,
+      infitLow: envelopes.get(i.itemId)?.infitLow ?? null,
+      infitHigh: envelopes.get(i.itemId)?.infitHigh ?? null,
     })),
   );
 
@@ -282,6 +296,12 @@ export async function runCalibration(teacherId: number): Promise<CalibrationRunS
           thresholds: i.thresholds,
           displacement: null,
           displacementError: null,
+          // Полоса для частично-кредитных заданий требует своей симуляции по
+          // категориям — пока их вердикт остаётся на книжных границах.
+          outfitLow: null,
+          outfitHigh: null,
+          infitLow: null,
+          infitHigh: null,
         })),
       );
     }
@@ -313,6 +333,11 @@ export type ItemCalibration = {
   /** Только у общих заданий: расхождение с самим собой между вариантами. */
   displacement: number | null;
   displacement_error: number | null;
+  /** Полоса, в которой держится исправное задание при таком объёме данных. */
+  outfit_low: number | null;
+  outfit_high: number | null;
+  infit_low: number | null;
+  infit_high: number | null;
 };
 
 /**
@@ -348,6 +373,10 @@ export async function latestCalibrationByItem(
       thresholds: r.thresholds,
       displacement: r.displacement,
       displacement_error: r.displacementError,
+      outfit_low: r.outfitLow,
+      outfit_high: r.outfitHigh,
+      infit_low: r.infitLow,
+      infit_high: r.infitHigh,
     });
   }
   return out;

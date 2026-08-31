@@ -155,6 +155,13 @@ const STRINGS = {
     uz: "Hech bir variantga kirmagan bank topshiriqlari",
   },
 
+  // --- полоса соответствия ---
+  fitEnvelope: { ru: "полоса {low}–{high}", uz: "yo'lak {low}–{high}" },
+  fitEnvelopeHint: {
+    ru: "Полоса измерена симуляцией на этих же данных: столько даёт исправное задание при таком числе ответов. Постоянный порог здесь не годится — разброс среднего квадрата зависит от объёма, и на тридцати ответах книжные 0.5–1.5 лежат внутри разброса нормальных заданий.",
+    uz: "Yo'lak shu ma'lumotlar bo'yicha simulyatsiya bilan o'lchangan: shuncha javob bo'lganda soz topshiriq shuncha beradi. Doimiy chegara bu yerda yaramaydi.",
+  },
+
   // --- дрейф якорей ---
   raschDriftTitle: { ru: "Дрейф общих заданий", uz: "Umumiy topshiriqlar siljishi" },
   raschDriftHint: {

@@ -61,6 +61,8 @@ type Card = {
     displacement_error: number | null;
     infit: number | null;
     outfit: number | null;
+    outfit_low: number | null;
+    outfit_high: number | null;
     fit_band: "overfit" | "productive" | "underfit" | "degrading" | null;
     calibration_state: "none" | "provisional" | "stable";
     calibration_responses: number;
@@ -392,6 +394,14 @@ export function ItemCardPage() {
                       <span className="text-xl font-semibold tabular-nums">
                         {c.stats.outfit?.toFixed(2) ?? "—"}
                       </span>
+                      {c.stats.outfit_low !== null && c.stats.outfit_high !== null && (
+                        <span className="mt-0.5 block text-xs tabular-nums text-muted">
+                          {t("fitEnvelope", {
+                            low: c.stats.outfit_low.toFixed(2),
+                            high: c.stats.outfit_high.toFixed(2),
+                          })}
+                        </span>
+                      )}
                     </Field>
                   </div>
                   {c.stats.fit_band && (
