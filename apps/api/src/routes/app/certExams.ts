@@ -487,7 +487,11 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
       .limit(1);
 
     const keyRows = await db
-      .select({ taskNumber: certExamItems.taskNumber, option: certItems.correctOption })
+      .select({
+        taskNumber: certExamItems.taskNumber,
+        itemId: certItems.id,
+        option: certItems.correctOption,
+      })
       .from(certExamItems)
       .innerJoin(certItems, eq(certItems.id, certExamItems.itemId))
       .where(eq(certExamItems.examId, exam.id));
@@ -528,6 +532,35 @@ const appCertExamRoutes: FastifyPluginAsync = async (app) => {
     let autoScore = 0;
     const now = new Date();
     await db.transaction(async (tx) => {
+      // Пропущенное закрытое задание — это неверный ответ, а не отсутствие
+      // ответа. Разница не косметическая: строки нет — и задание выпадает из
+      // калибровки целиком, то есть выглядит так, будто его не показывали.
+      // Трудное задание, которое сильные решили, а остальные молча
+      // пролистнули, оценивалось бы по одним только решившим и казалось бы
+      // легче, чем оно есть; заодно завышалась бы подготовка пролиставшего,
+      // потому что его ноль нигде не наблюдался.
+      //
+      // «Не дошёл по времени» как отдельный случай у нас не существует: все
+      // задания варианта лежат на одном экране с первой секунды, порядка
+      // прохождения нет. Поэтому пустое поле здесь всегда означает выбор,
+      // а не нехватку времени, и никакой эвристики на хвост не нужно.
+      const answered = new Set(answers.map((a) => a.taskNumber));
+      const blanks = keyRows.filter(
+        (r) => isClosedTask(r.taskNumber) && !answered.has(r.taskNumber),
+      );
+      if (blanks.length > 0) {
+        await tx.insert(certExamAnswers).values(
+          blanks.map((r) => ({
+            attemptId: attempt.id,
+            taskNumber: r.taskNumber,
+            itemId: r.itemId,
+            chosenOption: null,
+            isCorrect: false,
+            updatedAt: now,
+          })),
+        );
+      }
+
       for (const a of answers) {
         if (!isClosedTask(a.taskNumber)) continue;
         const correct = keyByTask.get(a.taskNumber);
